@@ -1,4 +1,4 @@
-# TSB Hub v0.7.1-dev
+# TSB Hub v0.7.2-dev
 
 Этап 0.7: первая полноценная PWA-обвязка для GitHub Pages.
 

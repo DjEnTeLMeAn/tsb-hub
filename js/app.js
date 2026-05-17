@@ -1,4 +1,4 @@
-const APP_VERSION = '0.7.1-dev';
+const APP_VERSION = '0.7.2-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -280,10 +280,13 @@ function getHealth(iso = state.selectedDate) {
 }
 
 function getProgress(iso = state.selectedDate) {
-  const tasks = getTasks(iso).filter(task => !task.dismissed);
+  // Скрытие из блока «Незавершённое за прошлые дни» не удаляет задачу из истории дня.
+  // Поэтому dismissed-задачи остаются в общем количестве, иначе день с двумя задачами
+  // после скрытия одной старой задачи превращался в неверный счётчик 1/1.
+  const tasks = getTasks(iso);
   const total = tasks.length;
   const done = tasks.filter(task => task.done).length;
-  const failed = tasks.filter(task => task.failed).length;
+  const failed = tasks.filter(task => task.failed || task.dismissed).length;
   return { total, done, failed, pct: total ? Math.round((done / total) * 100) : 0 };
 }
 

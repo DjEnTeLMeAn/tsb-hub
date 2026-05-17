@@ -441,7 +441,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .modal-card strong { color: var(--text); }
 
 
-/* v0.7.0-dev: адаптация под GitHub Pages, ПК + Android */
+/* v0.7.1-dev: адаптация под GitHub Pages, ПК + Android */
 html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Удобная публикация через GitHub Pages: приложение не должно зависеть от file:// */
@@ -547,4 +547,4 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .date-pill-hint { display: none; }
 }
 
-/* v0.7.0-dev: PWA stage. Интерфейс не меняется, добавлена установка через GitHub Pages. */
+/* v0.7.1-dev: PWA stage. Интерфейс не меняется, добавлена установка через GitHub Pages. */

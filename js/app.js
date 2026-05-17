@@ -1,4 +1,4 @@
-const APP_VERSION = '0.6.0-dev';
+const APP_VERSION = '0.7.0-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -662,7 +662,7 @@ function buildSettingsHTML() {
     </section>
     <section class="card">
       <div class="card-title-row"><h2>Внешний вид</h2></div>
-      <p class="muted">В 0.5 фиксируем рабочую структуру. Цвета, иконки, скругления и плотность интерфейса дальше меняются через дизайн-токены, без переписывания логики вкладок.</p>
+      <p class="muted">В 0.6–0.7 фиксируем рабочую структуру и PWA-обвязку. Цвета, иконки, скругления и плотность интерфейса дальше меняются через дизайн-токены, без переписывания логики вкладок.</p>
     </section>
     <section class="card">
       <div class="card-title-row"><h2>Диагностика версии</h2></div>
@@ -676,6 +676,7 @@ function buildSettingsHTML() {
         migratedFromOldStorage: ${escapeHTML(app.settings.migratedFromOldStorage)}
       </div>
     </section>
+    ${getPwaStatusHTML()}
   `;
 }
 
@@ -1323,6 +1324,49 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js?v=0.7.0-dev')
+      .then(registration => {
+        registration.addEventListener('updatefound', () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener('statechange', () => {
+            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+              showToast('Доступна новая версия. Обнови страницу.');
+            }
+          });
+        });
+      })
+      .catch(error => console.warn('Service worker не зарегистрирован:', error));
+  });
+}
+
+function getPwaStatusHTML() {
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const swSupported = 'serviceWorker' in navigator;
+  const controlled = Boolean(navigator.serviceWorker?.controller);
+  const secure = window.isSecureContext;
+  const protocol = window.location.protocol;
+  return `
+    <section class="card">
+      <div class="card-title-row"><h2>PWA-диагностика</h2></div>
+      <div class="code">
+        protocol: ${escapeHTML(protocol)}<br>
+        secureContext: ${escapeHTML(secure)}<br>
+        serviceWorker supported: ${escapeHTML(swSupported)}<br>
+        serviceWorker controlled: ${escapeHTML(controlled)}<br>
+        standalone mode: ${escapeHTML(standalone)}<br>
+        origin: ${escapeHTML(window.location.origin)}
+      </div>
+      <p class="muted">Для установки на Android открой GitHub Pages-ссылку в Chrome и выбери «Установить приложение» / «Добавить на главный экран». Если serviceWorker controlled = false после первого открытия, обнови страницу один раз.</p>
+    </section>
+  `;
+}
+
 function setupEvents() {
   $('#prevDayBtn').onclick = () => setSelectedDate(addDays(state.selectedDate, -1));
   $('#nextDayBtn').onclick = () => setSelectedDate(addDays(state.selectedDate, 1));
@@ -1331,14 +1375,7 @@ function setupEvents() {
   $('#closeCalendarBtn').onclick = () => $('#calendarDialog').close();
   $$('.tab-button').forEach(btn => btn.onclick = () => setTab(btn.dataset.tab));
 
-  if ('serviceWorker' in navigator) {
-    // В dev-сборках отключаем service worker, чтобы старый кэш не подсовывал прошлые версии JS/CSS.
-    if (APP_VERSION.includes('-dev')) {
-      navigator.serviceWorker.getRegistrations?.().then(regs => regs.forEach(reg => reg.unregister())).catch(() => {});
-    } else {
-      navigator.serviceWorker.register('./service-worker.js').catch(error => console.warn('Service worker не зарегистрирован:', error));
-    }
-  }
+  registerServiceWorker();
 }
 
 setupEvents();

@@ -802,7 +802,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .finance-goals-field textarea { min-height: 42px; }
 .finance-note-card { background: rgba(15,23,42,.58); }
 
-/* История стилей: исправление финансов 0.8.13 — дневные траты, цели и фиксированные модальные окна */
+/* История стилей: исправление финансов 0.8.14 — дневные траты, цели и фиксированные модальные окна */
 .modal-dialog {
   max-width: calc(100vw - 24px);
 }
@@ -875,7 +875,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* История стилей: UX 0.8.13 — вкладки просмотра, цели и сворачивание дней */
+/* История стилей: UX 0.8.14 — вкладки просмотра, цели и сворачивание дней */
 .day-task-details { margin-top: 10px; }
 .day-task-details > summary { min-height: 40px; font-size: .92rem; }
 .finance-goals-list { grid-template-columns: 1fr; }
@@ -897,7 +897,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .form-grid.finance-context { grid-template-columns: 1fr; }
 }
 
-/* UX 0.8.13 — выравнивание карточек, кнопок и сворачиваемых списков */
+/* UX 0.8.14 — выравнивание карточек, кнопок и сворачиваемых списков */
 .card-title-row {
   align-items: flex-start;
 }
@@ -949,7 +949,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* История стилей: мобильная навигация 0.8.13 — панель не перекрывает контент */
+/* История стилей: мобильная навигация 0.8.14 — панель не перекрывает контент */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(156px + env(safe-area-inset-bottom)) !important;
@@ -997,5 +997,55 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .tab-button {
     font-size: .68rem !important;
     letter-spacing: -0.01em;
+  }
+}
+
+
+/* UX 0.8.14 — мобильные вкладки чуть крупнее, без вылезания текста */
+@media (max-width: 900px) {
+  .app-shell {
+    padding-bottom: calc(172px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    max-height: calc(132px + env(safe-area-inset-bottom));
+    padding: 8px !important;
+    gap: 7px !important;
+  }
+
+  .tab-button {
+    min-height: 44px !important;
+    padding: 4px 6px !important;
+    font-size: .76rem !important;
+    line-height: 1.08 !important;
+    white-space: normal !important;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow-wrap: anywhere;
+  }
+
+  .toast {
+    bottom: calc(148px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 380px) {
+  .app-shell {
+    padding-bottom: calc(184px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .tabs {
+    max-height: calc(144px + env(safe-area-inset-bottom));
+    gap: 6px !important;
+  }
+
+  .tab-button {
+    min-height: 46px !important;
+    padding: 4px 4px !important;
+    font-size: .7rem !important;
+    letter-spacing: -0.015em;
   }
 }

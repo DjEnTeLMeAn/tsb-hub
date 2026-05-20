@@ -1,10 +1,10 @@
-const CACHE_NAME = 'tsb-hub-v0-8-13-dev';
+const CACHE_NAME = 'tsb-hub-v0-8-14-dev';
 const APP_SHELL = [
   './',
   './index.html',
-  './css/style.css?v=0.8.13-dev',
-  './js/app.js?v=0.8.13-dev',
-  './manifest.json?v=0.8.13-dev',
+  './css/style.css?v=0.8.14-dev',
+  './js/app.js?v=0.8.14-dev',
+  './manifest.json?v=0.8.14-dev',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];

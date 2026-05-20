@@ -1,4 +1,4 @@
-const APP_VERSION = '0.8.13-dev';
+const APP_VERSION = '0.8.14-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -891,6 +891,8 @@ function renderToday() {
 
     ${renderLocalInsights(state.selectedDate, true)}
 
+    ${renderGptAdviceCard('today')}
+
     <section class="grid-2">
       <div class="card today-input-card">
         <div class="card-title-row"><h2>Задачи дня</h2><button class="ghost-button small" data-tab-target="plans">Планы</button></div>
@@ -909,7 +911,6 @@ function renderToday() {
         <div class="finance-summary-line">Потрачено за день: ${formatRub(financeSummary.total)} · еда: ${formatRub(financeSummary.food)} · транспорт: ${formatRub(financeSummary.transport)} · другое: ${formatRub(financeSummary.other)}</div>
         ${renderCollapsedBlock('Показать операции дня', `<div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, true)}</div>`, `${financeSummary.count}`)}
       </div>
-      ${renderGptAdviceCard('today')}
     </section>
 
     <section class="grid-2">
@@ -2378,7 +2379,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.8.13-dev')
+    navigator.serviceWorker.register('./service-worker.js?v=0.8.14-dev')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

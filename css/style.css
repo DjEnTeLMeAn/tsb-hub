@@ -802,7 +802,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .finance-goals-field textarea { min-height: 42px; }
 .finance-note-card { background: rgba(15,23,42,.58); }
 
-/* История стилей: исправление финансов 0.8.14 — дневные траты, цели и фиксированные модальные окна */
+/* История стилей: исправление финансов 0.8.16 — дневные траты, цели и фиксированные модальные окна */
 .modal-dialog {
   max-width: calc(100vw - 24px);
 }
@@ -875,7 +875,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* История стилей: UX 0.8.14 — вкладки просмотра, цели и сворачивание дней */
+/* История стилей: UX 0.8.16 — вкладки просмотра, цели и сворачивание дней */
 .day-task-details { margin-top: 10px; }
 .day-task-details > summary { min-height: 40px; font-size: .92rem; }
 .finance-goals-list { grid-template-columns: 1fr; }
@@ -897,7 +897,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .form-grid.finance-context { grid-template-columns: 1fr; }
 }
 
-/* UX 0.8.14 — выравнивание карточек, кнопок и сворачиваемых списков */
+/* UX 0.8.16 — выравнивание карточек, кнопок и сворачиваемых списков */
 .card-title-row {
   align-items: flex-start;
 }
@@ -949,7 +949,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* История стилей: мобильная навигация 0.8.14 — панель не перекрывает контент */
+/* История стилей: мобильная навигация 0.8.16 — панель не перекрывает контент */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(156px + env(safe-area-inset-bottom)) !important;
@@ -1001,7 +1001,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* UX 0.8.14 — мобильные вкладки чуть крупнее, без вылезания текста */
+/* UX 0.8.16 — мобильные вкладки чуть крупнее, без вылезания текста */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(172px + env(safe-area-inset-bottom)) !important;
@@ -1047,5 +1047,45 @@ html, body { max-width: 100%; overflow-x: hidden; }
     padding: 4px 4px !important;
     font-size: .7rem !important;
     letter-spacing: -0.015em;
+  }
+}
+
+/* UX 0.8.16 — убрать визуальный черный круг/лишний акцент у плавающей навигации */
+@media (max-width: 900px) {
+  .tabs {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    overflow: visible !important;
+    border-radius: 20px !important;
+    background: rgba(15, 23, 42, .94) !important;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .34) !important;
+  }
+
+  .tabs::before,
+  .tabs::after,
+  .tab-button::before,
+  .tab-button::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  .tab-button {
+    border-radius: 14px !important;
+    background: rgba(255,255,255,0.055) !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  .tab-button.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, .95), rgba(96, 165, 250, .82)) !important;
+    border-color: rgba(255,255,255,.18) !important;
+    box-shadow: none !important;
+  }
+
+  .tab-button:focus,
+  .tab-button:focus-visible,
+  .tab-button:active {
+    outline: none !important;
+    box-shadow: none !important;
   }
 }

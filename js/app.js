@@ -1,4 +1,4 @@
-const APP_VERSION = '0.8.14-dev';
+const APP_VERSION = '0.8.16-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -29,12 +29,31 @@ const FINANCE_REASONS = [
   { value: 'reward', label: 'Награда' },
   { value: 'lazy', label: 'Лень' }
 ];
+const SESSION_TAB_KEY = 'tsb_hub_active_tab_session';
+const APP_TABS = ['today', 'plans', 'food', 'finance', 'important', 'sync', 'settings'];
+
+function getInitialActiveTab() {
+  try {
+    const savedTab = sessionStorage.getItem(SESSION_TAB_KEY);
+    return APP_TABS.includes(savedTab) ? savedTab : 'today';
+  } catch (error) {
+    return 'today';
+  }
+}
+
+function saveActiveTabForSession(tab) {
+  try {
+    if (APP_TABS.includes(tab)) sessionStorage.setItem(SESSION_TAB_KEY, tab);
+  } catch (error) {
+    // Если браузер запрещает sessionStorage, приложение просто открывается с вкладки «Сегодня».
+  }
+}
 
 let app = loadData();
 let state = {
   selectedDate: toISODate(new Date()),
   calendarMonth: startOfMonth(new Date()),
-  activeTab: 'today'
+  activeTab: getInitialActiveTab()
 };
 let toastTimer = null;
 
@@ -758,16 +777,22 @@ function setSelectedDate(iso) {
   renderAll();
 }
 
+function applyActiveTabToDom() {
+  document.body.dataset.activeTab = state.activeTab;
+  $$('.tab-button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === state.activeTab));
+  $$('.tab-page').forEach(page => page.classList.toggle('active', page.id === `tab-${state.activeTab}`));
+}
+
 function setTab(tab) {
+  if (!APP_TABS.includes(tab)) tab = 'today';
   state.activeTab = tab;
-  document.body.dataset.activeTab = tab;
-  $$('.tab-button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
-  $$('.tab-page').forEach(page => page.classList.toggle('active', page.id === `tab-${tab}`));
+  saveActiveTabForSession(tab);
+  applyActiveTabToDom();
   renderAll();
 }
 
 function renderAll() {
-  document.body.dataset.activeTab = state.activeTab;
+  applyActiveTabToDom();
   $('#selectedDateLabel').textContent = formatHumanDate(state.selectedDate);
   const renderSteps = [
     ['desktopCalendar', () => renderCalendar($('#desktopCalendar'))],
@@ -2379,7 +2404,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.8.14-dev')
+    navigator.serviceWorker.register('./service-worker.js?v=0.8.16-dev')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

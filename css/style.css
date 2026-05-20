@@ -802,7 +802,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .finance-goals-field textarea { min-height: 42px; }
 .finance-note-card { background: rgba(15,23,42,.58); }
 
-/* История стилей: исправление финансов 0.8.12 — дневные траты, цели и фиксированные модальные окна */
+/* История стилей: исправление финансов 0.8.13 — дневные траты, цели и фиксированные модальные окна */
 .modal-dialog {
   max-width: calc(100vw - 24px);
 }
@@ -875,7 +875,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* История стилей: UX 0.8.12 — вкладки просмотра, цели и сворачивание дней */
+/* История стилей: UX 0.8.13 — вкладки просмотра, цели и сворачивание дней */
 .day-task-details { margin-top: 10px; }
 .day-task-details > summary { min-height: 40px; font-size: .92rem; }
 .finance-goals-list { grid-template-columns: 1fr; }
@@ -897,7 +897,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .form-grid.finance-context { grid-template-columns: 1fr; }
 }
 
-/* UX 0.8.12 — выравнивание карточек, кнопок и сворачиваемых списков */
+/* UX 0.8.13 — выравнивание карточек, кнопок и сворачиваемых списков */
 .card-title-row {
   align-items: flex-start;
 }
@@ -946,5 +946,56 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .today-input-card > .form-grid.food,
   .food-note-card-balanced .card-title-row {
     min-height: 0;
+  }
+}
+
+/* История стилей: мобильная навигация 0.8.13 — панель не перекрывает контент */
+@media (max-width: 900px) {
+  .app-shell {
+    padding-bottom: calc(156px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .content-panel {
+    padding-bottom: calc(34px + env(safe-area-inset-bottom));
+  }
+
+  .tab-page.active::after {
+    content: '';
+    display: block;
+    height: calc(28px + env(safe-area-inset-bottom));
+  }
+
+  .tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    align-items: stretch;
+    max-height: calc(112px + env(safe-area-inset-bottom));
+    padding: 7px !important;
+    gap: 6px !important;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .42);
+  }
+
+  .tab-button {
+    min-height: 38px !important;
+    padding: 0 5px !important;
+  }
+
+  .toast {
+    bottom: calc(126px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 380px) {
+  .app-shell {
+    padding-bottom: calc(168px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .tabs {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    max-height: calc(124px + env(safe-area-inset-bottom));
+  }
+
+  .tab-button {
+    font-size: .68rem !important;
+    letter-spacing: -0.01em;
   }
 }

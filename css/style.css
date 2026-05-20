@@ -1,0 +1,950 @@
+:root {
+  --bg: #0f172a;
+  --bg-soft: #111827;
+  --card: #172033;
+  --card-2: #1f2937;
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --line: rgba(148, 163, 184, 0.22);
+  --accent: #8b5cf6;
+  --accent-2: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --critical: #f87171;
+  --important: #fbbf24;
+  --secondary: #60a5fa;
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  --radius: 18px;
+  --tap: 44px;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--text); }
+body { margin: 0; min-height: 100dvh; background: radial-gradient(circle at top left, rgba(139, 92, 246, 0.18), transparent 32rem), var(--bg); }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+
+.app-shell { width: min(1440px, 100%); margin: 0 auto; padding: 18px; }
+.app-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-mark { width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(135deg, var(--accent), #06b6d4); font-weight: 900; letter-spacing: -0.06em; box-shadow: var(--shadow); }
+h1 { margin: 0; font-size: clamp(1.3rem, 2.5vw, 2rem); line-height: 1.05; }
+p { margin: 0; }
+.brand-block p, .muted { color: var(--muted); }
+
+.date-switcher { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.icon-button, .ghost-button, .primary-button, .danger-button, .date-pill, .tab-button { border: 1px solid var(--line); color: var(--text); background: rgba(255,255,255,0.04); min-height: var(--tap); border-radius: 999px; padding: 0 14px; }
+.icon-button { min-width: var(--tap); padding: 0; font-size: 1.35rem; display: inline-grid; place-items: center; }
+.date-switcher .icon-button, .date-pill {
+  background: linear-gradient(180deg, rgba(31, 41, 55, .96), rgba(23, 32, 51, .96));
+  border-color: rgba(148, 163, 184, .28);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .22);
+}
+.date-switcher .icon-button:hover, .date-pill:hover {
+  border-color: rgba(139, 92, 246, .72);
+  background: linear-gradient(180deg, rgba(44, 52, 72, .98), rgba(31, 41, 55, .98));
+}
+.date-switcher .icon-button:focus-visible, .date-pill:focus-visible {
+  outline: none;
+  border-color: rgba(139,92,246,.88);
+  box-shadow: 0 0 0 3px rgba(139,92,246,.2), 0 10px 28px rgba(0, 0, 0, .22);
+}
+.date-pill { min-width: 230px; display: flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.1; padding: 7px 16px; font-weight: 800; }
+.date-pill-hint { font-size: .72rem; color: var(--muted); margin-top: 2px; font-weight: 600; }
+.primary-button { background: var(--accent); border-color: transparent; font-weight: 700; }
+.danger-button { background: rgba(239, 68, 68, .14); border-color: rgba(239, 68, 68, .35); color: #fecaca; }
+.ghost-button.small { min-height: 34px; font-size: .85rem; padding: 0 10px; }
+
+.layout { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+.side-panel { display: grid; gap: 18px; position: sticky; top: 18px; }
+.content-panel { min-width: 0; }
+.card, .panel { background: rgba(23, 32, 51, .84); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.card { padding: 16px; }
+.card-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+h2, h3 { margin: 0; }
+h2 { font-size: 1.05rem; }
+h3 { font-size: 1rem; }
+
+.tabs { display: flex; gap: 8px; overflow-x: auto; padding: 8px; background: rgba(15, 23, 42, .72); border: 1px solid var(--line); border-radius: 999px; margin-bottom: 14px; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab-button { flex: 0 0 auto; }
+.tab-button.active { background: var(--accent); border-color: transparent; font-weight: 800; }
+.tab-page { display: none; }
+.tab-page.active { display: grid; gap: 14px; }
+
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.stat-card { padding: 16px; background: rgba(255,255,255,.035); border: 1px solid var(--line); border-radius: 16px; }
+.stat-value { font-size: 1.7rem; font-weight: 900; margin-top: 8px; }
+.progress { height: 12px; border-radius: 999px; background: rgba(148, 163, 184, .18); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), #06b6d4); width: 0; transition: width .25s ease; }
+
+.form-grid { display: grid; grid-template-columns: minmax(0, 2fr) 150px auto; gap: 8px; align-items: end; }
+.form-grid.food { grid-template-columns: minmax(0, 1.5fr) minmax(120px, .8fr) 100px auto; }
+.form-grid.finance { grid-template-columns: minmax(100px, .7fr) minmax(130px, .9fr) minmax(130px, .9fr) minmax(0, 1.2fr) auto; }
+.form-grid.important { grid-template-columns: minmax(0, 1.2fr) 160px minmax(0, 1fr) auto; }
+.form-grid.weight { grid-template-columns: minmax(120px, 180px) minmax(0, 1fr) auto; }
+label { display: grid; gap: 5px; color: var(--muted); font-size: .86rem; }
+input, select, textarea { width: 100%; min-height: 42px; border: 1px solid var(--line); background: rgba(15, 23, 42, .76); color: var(--text); border-radius: 12px; padding: 10px 12px; outline: none; }
+input[type="date"] { color-scheme: dark; background: rgba(23, 32, 51, .92); }
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: .9;
+  filter: invert(1) brightness(1.45) saturate(.8);
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+textarea { resize: vertical; min-height: 92px; }
+input:focus, select:focus, textarea:focus { border-color: rgba(139,92,246,.8); box-shadow: 0 0 0 3px rgba(139,92,246,.18); }
+
+.task-list, .meal-list, .important-list, .compact-list, .finance-list { display: grid; gap: 10px; }
+.task-card, .meal-card, .important-card, .finance-card { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); background: rgba(255,255,255,.035); border-radius: 16px; }
+.task-top, .item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.task-main { display: flex; gap: 10px; min-width: 0; }
+.task-text { font-weight: 700; overflow-wrap: anywhere; }
+.task-card.done .task-text { text-decoration: line-through; color: var(--muted); }
+.badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border-radius: 999px; font-size: .78rem; border: 1px solid var(--line); color: var(--muted); }
+.badge.critical { color: #fecaca; border-color: rgba(248,113,113,.45); background: rgba(248,113,113,.12); }
+.badge.important { color: #fde68a; border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.12); }
+.badge.secondary { color: #bfdbfe; border-color: rgba(96,165,250,.45); background: rgba(96,165,250,.12); }
+.badge.overdue { color: #fecaca; border-color: rgba(239,68,68,.55); background: rgba(239,68,68,.16); }
+.subtasks { display: grid; gap: 6px; padding-left: 34px; }
+.subtask { display: flex; gap: 8px; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.actions button { min-height: 34px; padding: 0 10px; font-size: .83rem; }
+.empty { color: var(--muted); text-align: center; padding: 18px; border: 1px dashed var(--line); border-radius: 16px; }
+
+.week-grid { display: grid; grid-template-columns: repeat(7, minmax(180px, 1fr)); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.day-column { min-width: 180px; display: grid; align-content: start; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.025); }
+.day-column.selected { border-color: rgba(139,92,246,.85); background: rgba(139,92,246,.1); }
+.day-column.today { box-shadow: inset 0 0 0 1px rgba(34,197,94,.55); }
+.day-title { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-weight: 800; }
+.day-title span:last-child { color: var(--muted); font-size: .8rem; }
+
+.calendar-widget { display: grid; gap: 10px; }
+.calendar-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.calendar-title { font-weight: 900; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.calendar-cell { aspect-ratio: 1; min-height: 34px; border: 1px solid var(--line); border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: rgba(255,255,255,.025); }
+.calendar-cell.day { color: var(--text); }
+.calendar-cell.day.selected { background: var(--accent); color: #fff; border-color: transparent; font-weight: 900; }
+.calendar-cell.day.today { border-color: rgba(34,197,94,.9); }
+.calendar-cell.day.has-data::after { content: ''; width: 5px; height: 5px; border-radius: 999px; background: var(--accent-2); position: absolute; transform: translateY(13px); }
+.calendar-cell.day { position: relative; }
+
+.modal-dialog { border: none; background: transparent; padding: 16px; width: min(420px, 100%); }
+.modal-dialog::backdrop { background: rgba(0,0,0,.62); }
+.modal-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+.toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%) translateY(110px); background: #020617; color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 12px 16px; box-shadow: var(--shadow); transition: transform .2s ease; z-index: 20; max-width: min(92vw, 540px); text-align: center; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+.notice { padding: 12px 14px; border: 1px solid rgba(251,191,36,.4); background: rgba(251,191,36,.1); color: #fde68a; border-radius: 14px; }
+.sync-box { display: grid; gap: 10px; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .85rem; color: #d1d5db; }
+
+@media (max-width: 1040px) {
+  .layout { grid-template-columns: 1fr; }
+  .side-panel { display: none; }
+  .app-shell { padding: 12px; padding-bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .app-header { flex-direction: column; align-items: stretch; }
+  .date-switcher { justify-content: center; }
+  .date-pill { min-width: 0; flex: 1; }
+  .tabs { position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 10; border-radius: 22px; justify-content: space-between; background: rgba(2, 6, 23, .92); backdrop-filter: blur(14px); }
+  .tab-button { padding: 0 10px; font-size: .84rem; }
+  .grid-2, .grid-3, .grid-4, .form-grid, .form-grid.food, .form-grid.finance, .form-grid.important, .form-grid.weight { grid-template-columns: 1fr; }
+  .week-grid { grid-template-columns: 1fr; overflow: visible; }
+  .day-column { min-width: 0; }
+}
+
+@media (max-width: 430px) {
+  .brand-mark { width: 42px; height: 42px; border-radius: 14px; }
+  .tab-button { font-size: .78rem; min-height: 40px; }
+  .task-top, .item-top { flex-direction: column; }
+  .actions { justify-content: flex-start; }
+}
+
+/* История стилей: правки после второго теста */
+.task-main > input[type="checkbox"],
+.subtask > input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  flex: 0 0 22px;
+  margin: 1px 0 0;
+  accent-color: var(--accent-2);
+}
+.subtask > input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+.grid-2 .form-grid,
+.day-column .form-grid {
+  grid-template-columns: 1fr;
+}
+
+.grid-2 .form-grid.food,
+.day-column .form-grid.food {
+  grid-template-columns: minmax(120px, 0.9fr) minmax(120px, 0.8fr);
+}
+.grid-2 .form-grid.food label:nth-of-type(2),
+.day-column .form-grid.food label:nth-of-type(2),
+.grid-2 .form-grid.food button,
+.day-column .form-grid.food button {
+  grid-column: 1 / -1;
+}
+.grid-2 .form-grid.food label:nth-of-type(3),
+.grid-2 .form-grid.food label:nth-of-type(4),
+.day-column .form-grid.food label:nth-of-type(3),
+.day-column .form-grid.food label:nth-of-type(4) {
+  min-width: 0;
+}
+
+.week-grid .task-card,
+.week-grid .meal-card,
+.week-grid .important-card {
+  padding: 11px;
+}
+.week-grid .actions button,
+.grid-2 .actions button {
+  min-height: 32px;
+}
+
+.edit-dialog {
+  width: min(520px, calc(100vw - 24px));
+}
+.edit-form {
+  display: grid;
+  gap: 14px;
+}
+.edit-fields {
+  display: grid;
+  gap: 10px;
+}
+.modal-actions {
+  justify-content: flex-end;
+}
+
+body[data-active-tab="important"] .side-panel section:nth-child(2) {
+  display: none;
+}
+
+@media (min-width: 1041px) and (max-width: 1320px) {
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* История стилей: читаемость модальных окон и календаря */
+.modal-dialog,
+.modal-dialog * {
+  color: var(--text);
+}
+.modal-card {
+  color: var(--text);
+}
+.modal-card p,
+.modal-card h2,
+.modal-card label,
+.modal-card .calendar-title,
+.modal-card .calendar-cell,
+.modal-card .calendar-cell.day {
+  color: var(--text);
+}
+.modal-card input,
+.modal-card select,
+.modal-card textarea {
+  color: var(--text);
+  background: rgba(15, 23, 42, .92);
+}
+.modal-card input::placeholder,
+.modal-card textarea::placeholder {
+  color: var(--muted);
+}
+
+/* На ПК календарь уже есть слева, поэтому верхний календарь прячем до мобильной версии */
+@media (min-width: 1041px) {
+  .app-header .date-switcher {
+    display: none;
+  }
+  .app-header {
+    justify-content: flex-start;
+  }
+}
+
+/* Планы на ПК: карточки недели переносятся на новые строки, а не растягивают страницу вбок */
+.week-grid {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  overflow-x: visible;
+  align-items: start;
+}
+.week-grid.single-day {
+  grid-template-columns: minmax(0, 760px);
+}
+.day-column {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.day-column .task-card,
+.day-column .task-top,
+.day-column .task-main,
+.day-column .task-text {
+  min-width: 0;
+}
+.day-column .task-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.day-column .actions {
+  justify-content: flex-start;
+}
+
+/* Важные даты: кнопки всегда отдельной нижней строкой, чтобы длинный текст не ломал карточку */
+.important-card-wide {
+  gap: 12px;
+}
+.important-content {
+  min-width: 0;
+}
+.important-card-wide .important-actions {
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+.important-card-wide .important-actions button {
+  white-space: nowrap;
+}
+
+/* Настройки: чекбоксы внутри label не должны растягиваться как текстовые поля */
+.sync-box label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+.sync-box input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+}
+
+
+/* История стилей: дизайн-система, выравнивание и план недели */
+:root {
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 18px;
+  --surface-glass: rgba(23, 32, 51, .84);
+  --surface-item: rgba(255,255,255,.035);
+}
+
+.block-hint { margin: -4px 0 12px; line-height: 1.45; }
+
+/* Все поля и плейсхолдеры в модальных окнах остаются читаемыми на тёмной теме */
+.modal-dialog,
+.modal-dialog *,
+.modal-card,
+.modal-card * {
+  color: var(--text) !important;
+}
+.modal-card input,
+.modal-card select,
+.modal-card textarea {
+  background: rgba(15, 23, 42, .94) !important;
+  color: var(--text) !important;
+  border-color: var(--line);
+}
+.modal-card input::placeholder,
+.modal-card textarea::placeholder { color: var(--muted) !important; }
+.modal-card option { background: #111827; color: var(--text); }
+
+/* В 0.5 планы пока делаем вертикальным списком дней: меньше визуальных дыр и ничего не налезает */
+.week-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  overflow: visible;
+  align-items: stretch;
+}
+.week-grid.single-day { grid-template-columns: 1fr; }
+.day-column {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+}
+.day-title { padding-bottom: 2px; border-bottom: 1px solid rgba(148, 163, 184, 0.14); }
+.day-column .form-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(150px, 190px) auto;
+}
+.day-column .task-list { gap: 10px; }
+.day-column .task-card { padding: 12px; }
+.day-column .task-top { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.day-column .task-text { line-height: 1.35; margin-bottom: 6px; }
+.badge-row { margin-top: 4px; }
+
+.task-card, .meal-card, .important-card { line-height: 1.38; }
+.task-card h3, .meal-card h3, .important-card h3 { line-height: 1.3; }
+.actions { align-items: center; }
+.actions button { white-space: nowrap; }
+
+.important-card-wide { padding: 16px; }
+.important-content h3 { margin-top: 8px; }
+.important-content p { margin-top: 8px; line-height: 1.5; }
+.important-card-wide .important-actions { gap: 8px; }
+.important-card-wide .important-actions button,
+.ghost-button.small,
+.actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: .82rem;
+}
+
+.settings-grid { display: grid; gap: 12px; }
+.setting-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-item);
+}
+.setting-row span { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-size: .95rem; }
+.setting-row small { color: var(--muted); line-height: 1.45; }
+.setting-row input[type="checkbox"] {
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+@media (min-width: 1041px) {
+  .content-panel { max-width: 1100px; }
+}
+
+@media (max-width: 760px) {
+  .day-column .form-grid,
+  .day-column .form-grid.food,
+  .day-column .form-grid.important,
+  .day-column .form-grid.weight {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* История стилей: стабилизация настроек, прошлых задач и универсальных плейсхолдеров */
+.task-main { align-items: flex-start; }
+.task-main > input[type="checkbox"],
+.subtask > input[type="checkbox"] { border-radius: 6px; }
+.task-card .badge-row { gap: 8px; }
+.past-task-card .actions { justify-content: flex-start; }
+.setting-row select {
+  min-height: 38px;
+  max-width: 180px;
+  background: rgba(15, 23, 42, .82);
+  color: var(--text);
+}
+#tab-settings .card { min-height: auto; }
+.code { overflow-wrap: anywhere; line-height: 1.55; }
+
+
+/* История стилей: защита опасных действий */
+.danger-note { margin: 0; color: var(--muted); font-size: .86rem; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.modal-card strong { color: var(--text); }
+
+
+/* История стилей: адаптация под GitHub Pages, ПК + Android */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* Удобная публикация через GitHub Pages: приложение не должно зависеть от file:// */
+.app-shell { isolation: isolate; }
+
+/* ПК: текущую 0.5-структуру сохраняем, только немного выравниваем ширину */
+@media (min-width: 1041px) {
+  .content-panel { max-width: 1120px; }
+  .tab-page.active { gap: 16px; }
+}
+
+/* Планшеты и телефоны: превращаем страницу в более мобильную */
+@media (max-width: 900px) {
+  :root { --radius: 16px; --tap: 46px; }
+  body { background: var(--bg); }
+  .app-shell {
+    width: 100%;
+    padding: 10px;
+    padding-bottom: calc(132px + env(safe-area-inset-bottom));
+  }
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 9;
+    margin: -10px -10px 12px;
+    padding: 10px;
+    background: rgba(15, 23, 42, .94);
+    border-bottom: 1px solid rgba(148, 163, 184, .14);
+    backdrop-filter: blur(12px);
+  }
+  .brand-block { gap: 10px; }
+  .brand-mark { width: 42px; height: 42px; border-radius: 14px; }
+  .brand-block h1 { font-size: 1.25rem; }
+  .brand-block p { font-size: .82rem; }
+  .date-switcher { width: 100%; }
+  .date-pill { min-height: 46px; }
+  .card { padding: 14px; }
+  .card-title-row { align-items: flex-start; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 12px; }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 1.45rem; }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    overflow: visible;
+    padding: 8px;
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    border-radius: 24px;
+  }
+  .tab-button {
+    width: 100%;
+    min-height: 42px;
+    padding: 0 6px;
+    font-size: .78rem;
+    line-height: 1.05;
+  }
+
+  .task-top, .item-top { gap: 12px; }
+  .task-main { width: 100%; }
+  .actions { justify-content: flex-start; }
+  .actions button { min-height: 36px; }
+
+  .week-grid { gap: 12px; }
+  .day-column { padding: 12px; border-radius: 16px; }
+  .day-column .form-grid,
+  .day-column .form-grid.food,
+  .day-column .form-grid.important,
+  .day-column .form-grid.weight,
+  .form-grid,
+  .form-grid.food,
+  .form-grid.important,
+  .form-grid.weight {
+    grid-template-columns: 1fr !important;
+  }
+
+  input, select, textarea { font-size: 16px; } /* Android/iOS не увеличивают страницу при фокусе */
+
+  .important-card-wide .important-actions,
+  .important-actions,
+  .actions { gap: 8px; }
+  .important-content p { line-height: 1.48; }
+
+  .modal-dialog { width: min(100%, 440px); padding: 10px; }
+  .modal-card { padding: 14px; }
+  .calendar-grid { gap: 5px; }
+  .calendar-cell { min-height: 38px; border-radius: 11px; }
+}
+
+@media (max-width: 460px) {
+  .app-shell { padding: 8px; padding-bottom: calc(126px + env(safe-area-inset-bottom)); }
+  .app-header { margin: -8px -8px 10px; padding: 8px; }
+  .brand-block h1 { font-size: 1.15rem; }
+  .brand-mark { width: 38px; height: 38px; font-size: .82rem; }
+  .card { padding: 12px; }
+  .tab-button { font-size: .72rem; min-height: 40px; }
+  .ghost-button.small { font-size: .78rem; }
+  .task-card, .meal-card, .important-card { padding: 12px; }
+  .calendar-cell { min-height: 34px; }
+  .date-pill-hint { display: none; }
+}
+
+/* История стилей: PWA stage. Интерфейс не меняется, добавлена установка через GitHub Pages. */
+
+
+/* История стилей: финансы и упрощённое питание */
+.form-grid.food {
+  grid-template-columns: minmax(0, 1.5fr) minmax(120px, .9fr) 100px auto;
+}
+.form-grid.finance {
+  grid-template-columns: minmax(100px, .7fr) minmax(130px, .9fr) minmax(130px, .9fr) minmax(0, 1.2fr) auto;
+}
+.quick-category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.finance-summary-line {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+.help-button {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+@media (max-width: 1040px) {
+  .form-grid.food,
+  .form-grid.finance {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-2 .form-grid.food,
+.grid-2 .form-grid.finance,
+.day-column .form-grid.food,
+.day-column .form-grid.finance {
+  grid-template-columns: 1fr;
+}
+.grid-2 .form-grid.food label,
+.grid-2 .form-grid.food button,
+.grid-2 .form-grid.finance label,
+.grid-2 .form-grid.finance button,
+.day-column .form-grid.food label,
+.day-column .form-grid.food button,
+.day-column .form-grid.finance label,
+.day-column .form-grid.finance button {
+  grid-column: auto;
+}
+@media (max-width: 460px) {
+  .task-card, .meal-card, .important-card, .finance-card { padding: 12px; }
+}
+
+
+/* История стилей: финансовый контекст для планирования */
+.form-grid.finance-context {
+  grid-template-columns: minmax(120px, .8fr) minmax(130px, .8fr) minmax(170px, 1fr) minmax(0, 1.2fr) auto;
+}
+.form-grid.finance-plan {
+  grid-template-columns: minmax(110px, .7fr) 145px minmax(140px, 1fr) minmax(0, 1fr) auto;
+}
+.small-stat {
+  font-size: clamp(1.2rem, 2.2vw, 1.6rem);
+}
+@media (max-width: 1040px) {
+  .form-grid.finance-context,
+  .form-grid.finance-plan {
+    grid-template-columns: 1fr;
+  }
+}
+.grid-2 .form-grid.finance-context,
+.grid-2 .form-grid.finance-plan,
+.day-column .form-grid.finance-context,
+.day-column .form-grid.finance-plan {
+  grid-template-columns: 1fr;
+}
+.grid-2 .form-grid.finance-context label,
+.grid-2 .form-grid.finance-context button,
+.grid-2 .form-grid.finance-plan label,
+.grid-2 .form-grid.finance-plan button,
+.day-column .form-grid.finance-context label,
+.day-column .form-grid.finance-context button,
+.day-column .form-grid.finance-plan label,
+.day-column .form-grid.finance-plan button {
+  grid-column: auto;
+}
+
+
+/* История стилей: план от GPT внутри приложения */
+.gpt-plan-card .empty {
+  text-align: left;
+}
+.gpt-plan-preview {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, .52);
+  color: var(--text);
+  line-height: 1.45;
+  white-space: normal;
+}
+.gpt-plan-textarea {
+  min-height: 240px;
+}
+
+
+/* История стилей: локальные подсказки */
+.insight-card { border-color: rgba(96, 165, 250, 0.28); }
+.insight-card.compact { margin-top: 14px; }
+.insight-list { display: grid; gap: 10px; }
+.insight-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+.insight-item h3 { margin: 0 0 4px; font-size: 0.96rem; }
+.insight-item p { margin: 0; color: var(--muted); line-height: 1.45; }
+.insight-dot {
+  width: 10px; height: 10px; margin-top: 5px; border-radius: 999px;
+  background: rgba(148, 163, 184, 0.75);
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.08);
+}
+.insight-item.good .insight-dot { background: rgba(34, 197, 94, 0.95); box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.10); }
+.insight-item.soft .insight-dot { background: rgba(96, 165, 250, 0.95); box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.10); }
+.insight-item.warn .insight-dot { background: rgba(245, 158, 11, 0.95); box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.12); }
+.insight-item.critical .insight-dot { background: rgba(248, 113, 113, 0.95); box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.12); }
+
+/* История стилей: советы GPT и расширенные недельные подсказки */
+.gpt-advice-card {
+  border-color: rgba(168, 85, 247, 0.28);
+}
+.gpt-advice-card .gpt-plan-preview {
+  max-height: 220px;
+  overflow: hidden;
+}
+
+
+/* История стилей: аккуратный выбор даты и перенос GPT-блоков в настройки */
+#calendarDialog {
+  width: min(430px, calc(100vw - 22px));
+  padding: 0;
+  background: transparent !important;
+  border: none;
+}
+#calendarDialog::backdrop {
+  background: rgba(2, 6, 23, .72);
+  backdrop-filter: blur(8px);
+}
+#calendarDialog .modal-card {
+  border-radius: 26px;
+  padding: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(139, 92, 246, .22), transparent 18rem),
+    linear-gradient(180deg, rgba(31, 41, 55, .98), rgba(15, 23, 42, .98));
+  border: 1px solid rgba(148, 163, 184, .26);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .46);
+}
+#calendarDialog .card-title-row {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, .16);
+}
+#calendarDialog .calendar-widget {
+  gap: 14px;
+}
+#calendarDialog .calendar-head {
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, .16);
+  border-radius: 18px;
+  background: rgba(255,255,255,.035);
+}
+#calendarDialog .calendar-title {
+  flex: 1;
+  text-align: center;
+  letter-spacing: .01em;
+}
+#calendarDialog .calendar-grid {
+  gap: 7px;
+}
+#calendarDialog .calendar-cell {
+  min-height: 42px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  border-color: rgba(148, 163, 184, .18);
+}
+#calendarDialog .calendar-cell.day:hover {
+  border-color: rgba(139, 92, 246, .65);
+  background: rgba(139, 92, 246, .14);
+}
+#calendarDialog .calendar-cell.day.selected {
+  background: linear-gradient(135deg, var(--accent), #06b6d4);
+  box-shadow: 0 12px 28px rgba(139, 92, 246, .22);
+}
+#calendarDialog .calendar-cell.day.today:not(.selected) {
+  border-color: rgba(34,197,94,.9);
+  background: rgba(34,197,94,.08);
+}
+#calendarDialog .small-cal,
+#calendarDialog #closeCalendarBtn {
+  background: rgba(255,255,255,.055);
+  border-color: rgba(148, 163, 184, .24);
+}
+.settings-report-textarea {
+  min-height: 260px;
+}
+
+/* История стилей: собственный выбор даты, компактные финансовые списки и цели */
+.date-input-row { display: grid; grid-template-columns: minmax(0, 1fr) var(--tap); gap: 8px; align-items: center; }
+.date-picker-button { color: #fff; background: linear-gradient(180deg, rgba(139,92,246,.26), rgba(31,41,55,.96)); border-color: rgba(139,92,246,.45); text-shadow: 0 1px 8px rgba(255,255,255,.25); }
+.date-picker-button:hover { border-color: rgba(255,255,255,.72); background: linear-gradient(180deg, rgba(139,92,246,.45), rgba(31,41,55,.98)); }
+.date-picker-dialog { width: min(420px, calc(100vw - 24px)); }
+.date-picker-card { background: linear-gradient(180deg, rgba(23,32,51,.98), rgba(15,23,42,.98)); border-color: rgba(148,163,184,.28); }
+.custom-date-grid .calendar-cell { min-height: 38px; }
+.calendar-cell.muted-day { opacity: .42; }
+.date-picker-dialog .calendar-cell.day:hover { border-color: rgba(139,92,246,.72); background: rgba(139,92,246,.16); }
+.collapsible-list { display: grid; gap: 10px; }
+.collapsible-list > summary { list-style: none; cursor: pointer; min-height: var(--tap); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.035); color: var(--text); font-weight: 800; }
+.collapsible-list > summary::-webkit-details-marker { display: none; }
+.collapsible-list > summary::after { content: '⌄'; color: var(--muted); font-size: 1.1rem; }
+.collapsible-list[open] > summary::after { content: '⌃'; }
+.finance-context { grid-template-columns: minmax(130px, .9fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(220px, 1.4fr) auto; }
+.finance-goals-field textarea { min-height: 42px; }
+.finance-note-card { background: rgba(15,23,42,.58); }
+
+/* История стилей: исправление финансов 0.8.12 — дневные траты, цели и фиксированные модальные окна */
+.modal-dialog {
+  max-width: calc(100vw - 24px);
+}
+.modal-card,
+.edit-form,
+.date-picker-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.modal-card textarea,
+.edit-form textarea {
+  resize: none;
+}
+.finance-day-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.finance-auto-note,
+.finance-goals-list {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.035);
+  padding: 12px;
+}
+.finance-auto-note {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.finance-auto-note strong,
+.finance-goals-head {
+  color: var(--text);
+  font-weight: 900;
+}
+.finance-auto-note span {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: .9rem;
+}
+.finance-goals-list {
+  display: grid;
+  gap: 10px;
+}
+.finance-goals-list label {
+  margin: 0;
+}
+.form-grid.finance-context {
+  grid-template-columns: minmax(120px, .8fr) minmax(220px, 1fr) minmax(260px, 1.4fr) auto;
+  align-items: start;
+}
+.collapsible-list {
+  margin-top: 10px;
+}
+.collapsible-list > summary {
+  user-select: none;
+}
+@media (max-width: 1040px) {
+  .finance-day-summary,
+  .form-grid.finance-context {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 460px) {
+  .finance-day-summary { gap: 8px; }
+  .finance-auto-note,
+  .finance-goals-list { padding: 10px; }
+}
+
+
+/* История стилей: UX 0.8.12 — вкладки просмотра, цели и сворачивание дней */
+.day-task-details { margin-top: 10px; }
+.day-task-details > summary { min-height: 40px; font-size: .92rem; }
+.finance-goals-list { grid-template-columns: 1fr; }
+.finance-goal-card {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(15,23,42,.42);
+}
+.finance-goal-card .finance-goals-head { grid-column: 1 / -1; }
+.form-grid.finance-context { grid-template-columns: minmax(180px, 1fr) auto; align-items: end; }
+.modal-dialog { resize: none; }
+.modal-card textarea, .edit-form textarea, .sync-box textarea { resize: none; }
+@media (max-width: 860px) {
+  .finance-goal-card { grid-template-columns: 1fr; }
+  .form-grid.finance-context { grid-template-columns: 1fr; }
+}
+
+/* UX 0.8.12 — выравнивание карточек, кнопок и сворачиваемых списков */
+.card-title-row {
+  align-items: flex-start;
+}
+.card-title-row > .ghost-button,
+.card-title-row > .primary-button,
+.card-title-row > .danger-button,
+.card-title-row > .icon-button {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+.grid-2 > .card,
+.grid-3 > .card,
+.grid-4 > .card,
+.food-note-card-balanced,
+.today-input-card,
+.today-list-card {
+  display: flex;
+  flex-direction: column;
+}
+.today-list-card .collapsible-list {
+  margin-top: 0;
+}
+.today-input-card > .form-grid,
+.today-input-card > .form-grid.food {
+  min-height: 86px;
+}
+.today-input-card .finance-summary-line {
+  min-height: 22px;
+}
+.food-note-card-balanced .card-title-row {
+  min-height: 58px;
+}
+.food-note-card-balanced form {
+  margin-top: auto;
+}
+.weekly-weight-form,
+.day-note-form {
+  align-items: end;
+}
+.collapsible-list > summary {
+  min-height: 42px;
+  line-height: 1.2;
+}
+@media (max-width: 700px) {
+  .today-input-card > .form-grid,
+  .today-input-card > .form-grid.food,
+  .food-note-card-balanced .card-title-row {
+    min-height: 0;
+  }
+}

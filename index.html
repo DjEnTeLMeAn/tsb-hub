@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <title>TSB Hub v0.8.12-dev</title>
+  <link rel="manifest" href="manifest.json?v=0.8.12-dev" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css?v=0.8.12-dev" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark">TSB</div>
+        <div>
+          <h1>TSB Hub</h1>
+          <p>v0.8.12-dev</p>
+        </div>
+      </div>
+      <div class="date-switcher" aria-label="Выбранная дата">
+        <button class="icon-button" id="prevDayBtn" title="Предыдущий день">‹</button>
+        <button class="date-pill" id="openCalendarBtn" title="Открыть календарь">
+          <span id="selectedDateLabel">—</span>
+          <span class="date-pill-hint">календарь</span>
+        </button>
+        <button class="icon-button" id="nextDayBtn" title="Следующий день">›</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="side-panel" aria-label="Боковая панель">
+        <section class="card mini-calendar-card">
+          <div class="card-title-row">
+            <h2>Календарь</h2>
+            <button class="ghost-button small" id="todayBtn">Сегодня</button>
+          </div>
+          <div id="desktopCalendar"></div>
+        </section>
+
+        <section class="card">
+          <div class="card-title-row">
+            <h2>Ближайшее</h2>
+            <button class="ghost-button small" data-tab-target="important">Все</button>
+          </div>
+          <div id="sideImportantList" class="compact-list"></div>
+        </section>
+      </aside>
+
+      <section class="content-panel">
+        <nav class="tabs" aria-label="Разделы приложения">
+          <button class="tab-button active" data-tab="today">Сегодня</button>
+          <button class="tab-button" data-tab="plans">Планы</button>
+          <button class="tab-button" data-tab="food">Питание</button>
+          <button class="tab-button" data-tab="finance">Финансы</button>
+          <button class="tab-button" data-tab="important">Важное</button>
+          <button class="tab-button" data-tab="sync">Синхронизация</button>
+          <button class="tab-button" data-tab="settings">Настройки</button>
+        </nav>
+
+        <div class="tab-page active" id="tab-today"></div>
+        <div class="tab-page" id="tab-plans"></div>
+        <div class="tab-page" id="tab-food"></div>
+        <div class="tab-page" id="tab-finance"></div>
+        <div class="tab-page" id="tab-important"></div>
+        <div class="tab-page" id="tab-sync"></div>
+        <div class="tab-page" id="tab-settings">
+          <section class="card settings-card">
+            <div class="card-title-row"><h2>Настройки</h2></div>
+            <p class="muted">Если этот текст не заменился настройками после загрузки, значит JavaScript не отрисовал вкладку. Проверь версию JS в консоли или пришли скрин.</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="calendarDialog" class="modal-dialog">
+    <div class="modal-card">
+      <div class="card-title-row">
+        <h2>Выбор даты</h2>
+        <button class="icon-button" id="closeCalendarBtn" aria-label="Закрыть">×</button>
+      </div>
+      <div id="mobileCalendar"></div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script defer src="js/app.js?v=0.8.12-dev"></script>
+</body>
+</html>

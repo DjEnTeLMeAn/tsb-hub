@@ -1,4 +1,4 @@
-const APP_VERSION = '0.8.16-dev';
+const APP_VERSION = '0.8.17-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -2404,7 +2404,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.8.16-dev')
+    navigator.serviceWorker.register('./service-worker.js?v=0.8.17-dev')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

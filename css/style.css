@@ -802,7 +802,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .finance-goals-field textarea { min-height: 42px; }
 .finance-note-card { background: rgba(15,23,42,.58); }
 
-/* История стилей: исправление финансов 0.8.16 — дневные траты, цели и фиксированные модальные окна */
+/* История стилей: исправление финансов 0.8.17 — дневные траты, цели и фиксированные модальные окна */
 .modal-dialog {
   max-width: calc(100vw - 24px);
 }
@@ -875,7 +875,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* История стилей: UX 0.8.16 — вкладки просмотра, цели и сворачивание дней */
+/* История стилей: UX 0.8.17 — вкладки просмотра, цели и сворачивание дней */
 .day-task-details { margin-top: 10px; }
 .day-task-details > summary { min-height: 40px; font-size: .92rem; }
 .finance-goals-list { grid-template-columns: 1fr; }
@@ -897,7 +897,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .form-grid.finance-context { grid-template-columns: 1fr; }
 }
 
-/* UX 0.8.16 — выравнивание карточек, кнопок и сворачиваемых списков */
+/* UX 0.8.17 — выравнивание карточек, кнопок и сворачиваемых списков */
 .card-title-row {
   align-items: flex-start;
 }
@@ -949,7 +949,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* История стилей: мобильная навигация 0.8.16 — панель не перекрывает контент */
+/* История стилей: мобильная навигация 0.8.17 — панель не перекрывает контент */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(156px + env(safe-area-inset-bottom)) !important;
@@ -1001,7 +1001,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* UX 0.8.16 — мобильные вкладки чуть крупнее, без вылезания текста */
+/* UX 0.8.17 — мобильные вкладки чуть крупнее, без вылезания текста */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(172px + env(safe-area-inset-bottom)) !important;
@@ -1050,7 +1050,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* UX 0.8.16 — убрать визуальный черный круг/лишний акцент у плавающей навигации */
+/* UX 0.8.17 — убрать визуальный черный круг/лишний акцент у плавающей навигации */
 @media (max-width: 900px) {
   .tabs {
     display: grid !important;
@@ -1087,5 +1087,96 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .tab-button:active {
     outline: none !important;
     box-shadow: none !important;
+  }
+}
+
+/* UX 0.8.17 — чистая мобильная навигация без тёмного артефакта между последними вкладками */
+@media (max-width: 900px) {
+  .tabs {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    padding: 7px !important;
+    max-height: none !important;
+    border-radius: 20px !important;
+    background: rgba(15, 23, 42, .96) !important;
+    border: 1px solid rgba(148, 163, 184, .22) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .32) !important;
+    scrollbar-width: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+    isolation: isolate;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .tab-button {
+    position: relative;
+    z-index: 1;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 42px !important;
+    padding: 4px 6px !important;
+    border-radius: 13px !important;
+    background: rgba(255, 255, 255, .075) !important;
+    border-color: rgba(148, 163, 184, .18) !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+    outline: none !important;
+    font-size: .75rem !important;
+    line-height: 1.08 !important;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: clip !important;
+    text-align: center !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation;
+  }
+
+  .tab-button.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, .92), rgba(96, 165, 250, .74)) !important;
+    border-color: rgba(255, 255, 255, .2) !important;
+    box-shadow: none !important;
+  }
+
+  .tab-button:focus,
+  .tab-button:focus-visible,
+  .tab-button:active {
+    outline: none !important;
+    box-shadow: none !important;
+    filter: none !important;
+  }
+
+  .app-shell {
+    padding-bottom: calc(196px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .toast {
+    bottom: calc(164px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .tab-button {
+    min-height: 41px !important;
+    font-size: .68rem !important;
+    padding: 4px 4px !important;
+    letter-spacing: -0.015em;
+  }
+
+  .app-shell {
+    padding-bottom: calc(200px + env(safe-area-inset-bottom)) !important;
   }
 }

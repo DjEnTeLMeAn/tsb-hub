@@ -1,15 +1,15 @@
-const CACHE_NAME = 'tsb-hub-v0-8-30-finance-rollback';
+const CACHE_NAME = 'tsb-hub-v0-8-31-finance-clean-ui';
 const APP_SHELL = [
   './',
   './index.html',
   './css/style.css?v=0.8.21-dev',
   './css/mobile-first-cleanup.css?v=0.8.22-mobile-cleanup',
   './css/mobile-dashboard.css?v=0.8.25-today-core',
-  './css/mobile-finance.css?v=0.8.26-finance-life',
+  './css/mobile-finance.css?v=0.8.31-finance-clean-ui',
   './js/app.js?v=0.8.21-dev',
   './js/mobile-first-cleanup.js?v=0.8.22-mobile-cleanup',
   './js/mobile-dashboard.js?v=0.8.24-lean',
-  './js/mobile-finance.js?v=0.8.26-finance-life',
+  './js/mobile-finance.js?v=0.8.31-finance-clean-ui',
   './manifest.json?v=0.8.21-dev',
   './icons/icon-192.png',
   './icons/icon-512.png'

@@ -1,9 +1,11 @@
-const CACHE_NAME = 'tsb-hub-v0-8-21-dev';
+const CACHE_NAME = 'tsb-hub-v0-8-22-mobile-cleanup';
 const APP_SHELL = [
   './',
   './index.html',
   './css/style.css?v=0.8.21-dev',
+  './css/mobile-first-cleanup.css?v=0.8.22-mobile-cleanup',
   './js/app.js?v=0.8.21-dev',
+  './js/mobile-first-cleanup.js?v=0.8.22-mobile-cleanup',
   './manifest.json?v=0.8.21-dev',
   './icons/icon-192.png',
   './icons/icon-512.png'

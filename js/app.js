@@ -1,4 +1,4 @@
-const APP_VERSION = '0.8.17-dev';
+const APP_VERSION = '0.8.21-dev';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -53,7 +53,8 @@ let app = loadData();
 let state = {
   selectedDate: toISODate(new Date()),
   calendarMonth: startOfMonth(new Date()),
-  activeTab: getInitialActiveTab()
+  activeTab: getInitialActiveTab(),
+  expandedSections: {}
 };
 let toastTimer = null;
 
@@ -74,12 +75,15 @@ function createDefaultData() {
     },
     tasks: {},
     health: {},
+    dailyReports: {},
     finance: {},
     financeContext: {
       availableBalance: '',
+      reserveBalance: '',
       savingGoal: '',
       incomes: [],
-      obligations: []
+      obligations: [],
+      operations: []
     },
     gptPlans: {},
     importantDates: [],
@@ -129,6 +133,7 @@ function normalizeData(data) {
     meta: { ...defaults.meta, ...(data.meta || {}), appVersion: APP_VERSION, dataVersion: defaults.meta.dataVersion },
     tasks: data.tasks || {},
     health: data.health || {},
+    dailyReports: normalizeDailyReports(data.dailyReports),
     finance: normalizeFinance(data.finance),
     financeContext: normalizeFinanceContext(data.financeContext),
     gptPlans: normalizeGptPlans(data.gptPlans),
@@ -358,12 +363,56 @@ function getHealth(iso = state.selectedDate) {
   if (!Array.isArray(app.health[iso].meals)) app.health[iso].meals = [];
   return app.health[iso];
 }
+
+function normalizeDailyReports(value) {
+  if (!value || typeof value !== 'object') return {};
+  const result = {};
+  Object.entries(value).forEach(([iso, report]) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+    const source = report && typeof report === 'object' ? report : {};
+    result[iso] = {
+      selfScore: clampScore(source.selfScore),
+      driveScore: clampScore(source.driveScore),
+      text: String(source.text || source.note || '').trim(),
+      updatedAt: source.updatedAt || source.createdAt || ''
+    };
+  });
+  return result;
+}
+
+function clampScore(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  const num = Math.round(Number(value));
+  if (!Number.isFinite(num)) return '';
+  const clamped = Math.min(100, Math.max(0, num));
+  return String(Math.round(clamped / 25) * 25);
+}
+
+function getDailyReport(iso = state.selectedDate) {
+  if (!app.dailyReports || typeof app.dailyReports !== 'object') app.dailyReports = {};
+  if (!app.dailyReports[iso]) app.dailyReports[iso] = { selfScore: '', driveScore: '', text: '', updatedAt: '' };
+  return app.dailyReports[iso];
+}
+
+function hasDailyReport(iso = state.selectedDate) {
+  const report = getDailyReport(iso);
+  return Boolean(report.selfScore || report.driveScore || String(report.text || '').trim());
+}
+
+function getDailyReportChipText(iso = state.selectedDate) {
+  const report = getDailyReport(iso);
+  if (!hasDailyReport(iso)) return '—';
+  const self = report.selfScore || '—';
+  const drive = report.driveScore || '—';
+  return `${self}/${drive}`;
+}
 function normalizeFinance(value) {
   if (!value || typeof value !== 'object') return {};
   const result = {};
   Object.entries(value).forEach(([iso, day]) => {
     const expenses = Array.isArray(day?.expenses) ? day.expenses : [];
     result[iso] = {
+      noExpenses: Boolean(day?.noExpenses),
       expenses: expenses.map(expense => ({
         id: expense.id || uid('exp'),
         amount: normalizeMoneyInput(expense.amount || expense.sum || ''),
@@ -382,22 +431,89 @@ function normalizeFinance(value) {
 function normalizeFinanceContext(value) {
   const defaults = createDefaultData().financeContext;
   const source = value && typeof value === 'object' ? value : {};
-  const normalizePlanItem = (item, prefix) => ({
+  const normalizeStatus = (status, doneStatus) => [doneStatus, 'planned'].includes(status) ? status : 'planned';
+  const normalizePlanItem = (item, prefix, doneStatus) => ({
     id: item?.id || uid(prefix),
     amount: normalizeMoneyInput(item?.amount || item?.sum || ''),
     date: /^\d{4}-\d{2}-\d{2}$/.test(item?.date || '') ? item.date : '',
     title: String(item?.title || item?.source || item?.category || '').trim(),
     comment: String(item?.comment || '').trim(),
+    status: normalizeStatus(item?.status, doneStatus),
+    completedAt: item?.completedAt || item?.receivedAt || item?.paidAt || '',
+    createdAt: item?.createdAt || new Date().toISOString()
+  });
+  const normalizeOperation = (item) => ({
+    id: item?.id || uid('op'),
+    type: ['expense', 'income', 'obligation', 'adjustment'].includes(item?.type) ? item.type : 'adjustment',
+    amount: normalizeSignedMoneyInput(item?.amount || ''),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(item?.date || '') ? item.date : toISODate(new Date()),
+    title: String(item?.title || '').trim(),
+    comment: String(item?.comment || '').trim(),
+    sourceId: String(item?.sourceId || '').trim(),
     createdAt: item?.createdAt || new Date().toISOString()
   });
   return {
     ...defaults,
     ...source,
-    availableBalance: normalizeMoneyInput(source.availableBalance || source.balance || ''),
+    availableBalance: normalizeSignedMoneyInput(source.availableBalance || source.balance || ''),
+    reserveBalance: normalizeMoneyInput(source.reserveBalance || source.assetsBalance || ''),
     savingGoal: String(source.savingGoal || '').trim(),
-    incomes: Array.isArray(source.incomes) ? source.incomes.map(item => normalizePlanItem(item, 'inc')).filter(item => item.amount || item.title || item.date) : [],
-    obligations: Array.isArray(source.obligations) ? source.obligations.map(item => normalizePlanItem(item, 'obl')).filter(item => item.amount || item.title || item.date) : []
+    incomes: Array.isArray(source.incomes) ? source.incomes.map(item => normalizePlanItem(item, 'inc', 'received')).filter(item => item.amount || item.title || item.date) : [],
+    obligations: Array.isArray(source.obligations) ? source.obligations.map(item => normalizePlanItem(item, 'obl', 'paid')).filter(item => item.amount || item.title || item.date) : [],
+    operations: Array.isArray(source.operations) ? source.operations.map(normalizeOperation).filter(item => item.amount || item.title || item.comment) : []
   };
+}
+
+function normalizeSignedMoneyInput(value) {
+  const raw = String(value || '').trim().replace(',', '.');
+  if (!raw) return '';
+  const sign = raw.includes('-') ? -1 : 1;
+  const match = raw.match(/\d+(?:\.\d{0,2})?/);
+  if (!match) return '';
+  return String(Math.round(Number(match[0]) * 100) / 100 * sign);
+}
+
+function moneyNumber(value) {
+  return Number(String(value || '0').replace(',', '.')) || 0;
+}
+
+function setAvailableBalance(value) {
+  getFinanceContext().availableBalance = normalizeMoneyInput(value);
+}
+
+function addAvailableBalance(delta) {
+  const context = getFinanceContext();
+  const current = moneyNumber(context.availableBalance);
+  const next = Math.round((current + Number(delta || 0)) * 100) / 100;
+  context.availableBalance = String(Object.is(next, -0) ? 0 : next);
+}
+
+function addFinanceOperation(type, amount, title, comment = '', sourceId = '', date = state.selectedDate) {
+  const context = getFinanceContext();
+  context.operations.unshift({
+    id: uid('op'),
+    type,
+    amount: normalizeSignedMoneyInput(amount),
+    date: normalizeDateInput(date) || state.selectedDate,
+    title: String(title || '').trim(),
+    comment: String(comment || '').trim(),
+    sourceId: String(sourceId || '').trim(),
+    createdAt: new Date().toISOString()
+  });
+  context.operations = context.operations.slice(0, 250);
+}
+
+function applyBalanceCorrection(newBalance) {
+  const context = getFinanceContext();
+  const normalized = normalizeSignedMoneyInput(newBalance);
+  if (!normalized) {
+    context.availableBalance = '';
+    return 0;
+  }
+  const diff = Math.round((moneyNumber(normalized) - moneyNumber(context.availableBalance)) * 100) / 100;
+  context.availableBalance = normalized;
+  if (diff !== 0) addFinanceOperation('adjustment', diff, diff < 0 ? 'Корректировка: неуказанные расходы' : 'Корректировка баланса', 'Ручное уточнение доступной суммы', '', state.selectedDate);
+  return diff;
 }
 
 function getFinanceContext() {
@@ -512,6 +628,7 @@ function extractDailyAdviceFromPlan(planText, iso = state.selectedDate) {
 
 function renderGptAdviceCard(kind = 'today') {
   const plan = getGptPlan();
+  if (!plan.text) return '';
   const titles = {
     today: 'Совет GPT на сегодня',
     finance: 'Советы GPT по финансам',
@@ -527,7 +644,7 @@ function renderGptAdviceCard(kind = 'today') {
         </div>
         <button class="ghost-button small" type="button" data-gpt-advice="${escapeHTML(kind)}">Открыть</button>
       </div>
-      ${plan.text ? `<div class="gpt-plan-preview">${nl2br(getPlanPreviewText(getGptAdviceText(kind), kind === 'today' ? 320 : 360))}</div>` : '<div class="empty">План от GPT ещё не вставлен. После отчёта здесь будут ежедневные советы.</div>'}
+      <div class="gpt-plan-preview">${nl2br(getPlanPreviewText(getGptAdviceText(kind), kind === 'today' ? 320 : 360))}</div>
     </section>
   `;
 }
@@ -548,8 +665,9 @@ function openGptAdviceDialog(kind = 'today') {
 
 function getFinance(iso = state.selectedDate) {
   if (!app.finance) app.finance = {};
-  if (!app.finance[iso]) app.finance[iso] = { expenses: [] };
+  if (!app.finance[iso]) app.finance[iso] = { expenses: [], noExpenses: false };
   if (!Array.isArray(app.finance[iso].expenses)) app.finance[iso].expenses = [];
+  app.finance[iso].noExpenses = Boolean(app.finance[iso].noExpenses);
   return app.finance[iso];
 }
 
@@ -648,24 +766,6 @@ function getLocalInsights(iso = state.selectedDate) {
   const week = getWeekDataSummary(iso);
   const netAfterPlans = balance + weekIncomeTotal - weekObligationTotal;
 
-  if (week.totalSpent > 0) {
-    const foodShare = week.totalSpent ? Math.round((week.foodSpent / week.totalSpent) * 100) : 0;
-    if (foodShare >= 60 && week.foodSpent >= 1000) {
-      insights.push({ tone: 'warn', title: 'Еда занимает большую часть трат недели', text: `За неделю на еду ушло ${formatRub(week.foodSpent)} из ${formatRub(week.totalSpent)} (${foodShare}%). Стоит заранее выбрать простые и недорогие блюда на несколько дней.` });
-    } else if (week.foodSpent > 0) {
-      insights.push({ tone: 'soft', title: 'Есть база для анализа питания и денег', text: `За неделю: еда ${formatRub(week.foodSpent)}, всего трат ${formatRub(week.totalSpent)}. Данных уже достаточно для более точного недельного плана.` });
-    }
-  }
-
-  if (week.emotionalCount >= 3 || week.emotionalSpent >= 1000) {
-    insights.push({ tone: 'warn', title: 'Повторяются эмоциональные траты', text: `За неделю отмечено ${week.emotionalCount} эмоциональных трат на ${formatRub(week.emotionalSpent)}. Перед следующей покупкой лучше сделать паузу и выбрать более дешёвый способ снять напряжение.` });
-  } else if (week.emotionalCount > 0) {
-    insights.push({ tone: 'soft', title: 'Эмоциональные траты уже отслеживаются', text: `За неделю таких записей: ${week.emotionalCount}. Продолжай отмечать причины — так будет видно, какие состояния чаще всего ведут к расходам.` });
-  }
-
-  if (week.topExpenseDay?.summary?.total >= 1000) {
-    insights.push({ tone: 'soft', title: 'Есть день с заметными расходами', text: `${shortDate(week.topExpenseDay.iso)} потрачено ${formatRub(week.topExpenseDay.summary.total)}. Стоит отдельно проверить этот день: задачи, питание, усталость и заметки.` });
-  }
 
   if (week.totalTasks >= 5) {
     if (week.completionPct < 45) {
@@ -693,19 +793,13 @@ function getLocalInsights(iso = state.selectedDate) {
     insights.push({ tone: 'good', title: 'Задачи дня закрыты хорошо', text: 'День выглядит управляемо. Можно не добавлять лишнего без необходимости.' });
   }
 
-  if (impulseCount >= 2) {
-    insights.push({ tone: 'warn', title: 'Много эмоциональных трат за день', text: `За день отмечено ${impulseCount} эмоциональных трат. Перед следующей покупкой лучше сделать короткую паузу.` });
-  }
-  if (financeSummary.food >= 700) {
-    insights.push({ tone: 'warn', title: 'Еда сегодня заметно тянет бюджет', text: `На еду уже ушло ${formatRub(financeSummary.food)}. Лучше выбрать простой домашний вариант и не усложнять готовку.` });
-  }
 
-  if (balance > 0 && weekObligationTotal > 0 && weekObligationTotal > balance) {
-    insights.push({ tone: 'critical', title: 'Обязательные расходы выше доступного остатка', text: `На ближайшие 7 дней обязательных расходов: ${formatRub(weekObligationTotal)}, доступно: ${formatRub(balance)}. Нужен осторожный план без лишних покупок.` });
-  } else if (balance > 0 && weekObligationTotal > 0 && netAfterPlans < 0) {
-    insights.push({ tone: 'critical', title: 'После плановых денег всё равно минус', text: `Баланс + ближайшие поступления − обязательные расходы = ${formatRub(netAfterPlans)}. Нужен максимально осторожный план недели.` });
-  } else if (balance > 0 && netAfterPlans <= 0) {
-    insights.push({ tone: 'soft', title: 'Деньги нужно вести осторожно', text: nextIncome ? `Ближайшее поступление: ${shortDate(nextIncome.date)} · ${formatRub(nextIncome.amount)}. План лучше строить от обязательных расходов, еды и транспорта до этой даты.` : 'План лучше строить от обязательных расходов, еды и транспорта.' });
+  const financeClosedDays = week.pastOrTodayDays.filter(day => getFinance(day).expenses.length || getFinance(day).noExpenses).length;
+  const missingFinanceDays = week.pastOrTodayDays.length - financeClosedDays;
+  if (selectedIsTodayOrPast && !finance.expenses.length && !finance.noExpenses) {
+    insights.push({ tone: 'soft', title: 'Финансы дня не закрыты', text: 'Если трат не было, отметь “Сегодня не было трат”. Если были — добавь их одной короткой записью.' });
+  } else if (missingFinanceDays >= 3) {
+    insights.push({ tone: 'soft', title: 'Есть незакрытые финансовые дни', text: `За прошедшие дни недели ${missingFinanceDays} дней без трат и без отметки “без трат”. Лучше закрыть их коротко, чтобы отчёт был честным.` });
   }
 
   if (week.activeImportant > 0) {
@@ -724,7 +818,10 @@ function getLocalInsights(iso = state.selectedDate) {
 }
 
 function renderLocalInsights(iso = state.selectedDate, compact = false) {
-  const items = getLocalInsights(iso).map(item => `
+  const all = getLocalInsights(iso);
+  const visible = compact ? all.slice(0, 2) : all;
+  if (compact && !visible.length) return '';
+  const items = visible.map(item => `
     <article class="insight-item ${item.tone}">
       <div class="insight-dot" aria-hidden="true"></div>
       <div><h3>${escapeHTML(item.title)}</h3><p>${escapeHTML(item.text)}</p></div>
@@ -732,10 +829,15 @@ function renderLocalInsights(iso = state.selectedDate, compact = false) {
   `).join('');
   return `
     <section class="card insight-card ${compact ? 'compact' : ''}">
-      <div class="card-title-row"><div><h2>Локальные подсказки</h2><p class="muted">Короткие сигналы по выбранному дню и неделе.</p></div></div>
+      <div class="card-title-row"><div><h2>Локальные подсказки</h2><p class="muted">${compact ? 'Показываются только важные сигналы.' : 'Короткие сигналы по выбранному дню и неделе.'}</p></div>${compact && all.length > visible.length ? `<button class="ghost-button small" type="button" data-local-insights-open>Все ${all.length}</button>` : ''}</div>
       <div class="insight-list">${items}</div>
     </section>
   `;
+}
+
+function openLocalInsightsDialog() {
+  const text = getLocalInsights(state.selectedDate).map(item => `${item.title}\n${item.text}`).join('\n\n') || 'По выбранному дню нет важных локальных сигналов.';
+  return openInfoDialog({ title: 'Все локальные подсказки', message: text, buttonText: 'Закрыть' });
 }
 
 function getLocalInsightsReportText(iso = state.selectedDate) {
@@ -746,8 +848,10 @@ function renderCollapsedBlock(title, content, countText = '', options = {}) {
   const body = String(content || '').trim() || '<div class="empty">Пока нет записей.</div>';
   const safeTitle = escapeHTML(title);
   const suffix = countText ? ` · ${escapeHTML(countText)}` : '';
-  const openAttr = options.open ? ' open' : '';
-  return `<details class="collapsible-list today-details"${openAttr}><summary>${safeTitle}${suffix}</summary>${body}</details>`;
+  const key = options.key || title;
+  const isOpen = Object.prototype.hasOwnProperty.call(state.expandedSections, key) ? state.expandedSections[key] : Boolean(options.open);
+  const openAttr = isOpen ? ' open' : '';
+  return `<details class="collapsible-list today-details" data-details-key="${escapeHTML(key)}"${openAttr}><summary>${safeTitle}${suffix}</summary>${body}</details>`;
 }
 
 function getProgress(iso = state.selectedDate) {
@@ -780,6 +884,7 @@ function setSelectedDate(iso) {
 function applyActiveTabToDom() {
   document.body.dataset.activeTab = state.activeTab;
   $$('.tab-button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === state.activeTab));
+  $$('.mobile-tab-menu [data-tab-target]').forEach(btn => btn.classList.toggle('active', btn.dataset.tabTarget === state.activeTab));
   $$('.tab-page').forEach(page => page.classList.toggle('active', page.id === `tab-${state.activeTab}`));
 }
 
@@ -847,7 +952,7 @@ function renderCalendar(root) {
   for (let i = 0; i < startOffset; i += 1) cells += '<div class="calendar-cell empty-cell"></div>';
   for (let d = 1; d <= lastDay.getDate(); d += 1) {
     const iso = toISODate(new Date(year, month, d));
-    const hasData = (app.tasks[iso]?.length || 0) > 0 || (app.health[iso]?.meals?.length || 0) > 0 || app.health[iso]?.weight || (app.finance?.[iso]?.expenses?.length || 0) > 0;
+    const hasData = (app.tasks[iso]?.length || 0) > 0 || (app.health[iso]?.meals?.length || 0) > 0 || app.health[iso]?.weight || hasDailyReport(iso) || (app.finance?.[iso]?.expenses?.length || 0) > 0 || Boolean(app.finance?.[iso]?.noExpenses);
     cells += `<button class="calendar-cell day ${iso === state.selectedDate ? 'selected' : ''} ${iso === todayISO ? 'today' : ''} ${hasData ? 'has-data' : ''}" data-date="${iso}">${d}</button>`;
   }
 
@@ -878,6 +983,50 @@ function renderCalendar(root) {
   });
 }
 
+function renderTodaySummaryChips(progress, weeklyWeight, weeklyWeightISO, financeSummary) {
+  const reportText = getDailyReportChipText(state.selectedDate);
+  return `
+    <section class="card today-summary-compact">
+      <div class="card-title-row compact-title-row">
+        <div>
+          <h2>${state.selectedDate === toISODate(new Date()) ? 'Сегодня' : 'День'} · ${formatHumanDate(state.selectedDate)}</h2>
+          <p class="muted">Короткая сводка выбранной даты.</p>
+        </div>
+      </div>
+      <div class="summary-chip-row">
+        <span class="summary-chip">Задачи ${progress.done}/${progress.total}</span>
+        <span class="summary-chip">Выполнение ${progress.pct}%</span>
+        <span class="summary-chip">Вес ${weeklyWeight ? `${escapeHTML(weeklyWeight)} кг` : '—'} <small>${shortDate(weeklyWeightISO)}</small></span>
+        <span class="summary-chip">Траты ${formatRub(financeSummary.total)}</span>
+        <span class="summary-chip">Отчёт ${reportText}</span>
+      </div>
+    </section>
+  `;
+}
+
+function renderDailyReportCard() {
+  const report = getDailyReport();
+  const filled = hasDailyReport();
+  const preview = String(report.text || '').trim();
+  return `
+    <section class="card daily-report-card today-input-card">
+      <div class="card-title-row">
+        <div>
+          <h2>Итог дня</h2>
+          <p class="muted">Самоощущение, желание действовать и короткие мысли по дню.</p>
+        </div>
+      </div>
+      <div class="daily-report-status">
+        <span class="summary-chip">Самоощущение ${report.selfScore || '—'}</span>
+        <span class="summary-chip">Желание ${report.driveScore || '—'}</span>
+        <span class="summary-chip">${preview ? 'Комментарий есть' : 'Комментария нет'}</span>
+      </div>
+      ${preview ? `<p class="muted daily-report-preview">${escapeHTML(getPlanPreviewText(preview, 180))}</p>` : '<p class="muted daily-report-preview">Можно заполнить одной строкой в конце дня. Подробно писать не обязательно.</p>'}
+      <button class="primary-button" type="button" data-daily-report-open>${filled ? 'Изменить итог дня' : 'Заполнить итог дня'}</button>
+    </section>
+  `;
+}
+
 function renderToday() {
   const root = $('#tab-today');
   if (!root) return;
@@ -896,23 +1045,10 @@ function renderToday() {
   const overdueSection = app.settings.showOverdueOnToday ? `
       <div class="card today-list-card">
         <div class="card-title-row"><h2>Незавершённое за прошлые дни</h2><button class="ghost-button small" data-tab-target="settings">Настроить</button></div>
-        ${renderCollapsedBlock('Показать незавершённые задачи', `<div class="task-list">${pastTasks || '<div class="empty">Незавершённых задач за выбранный период нет.</div>'}</div>`, overdueCount ? `${overdueCount} · ${windowDays} дн.` : `${windowDays} дн.`)}
+        ${renderCollapsedBlock('Показать незавершённые задачи', `<div class="task-list">${pastTasks || '<div class="empty">Незавершённых задач за выбранный период нет.</div>'}</div>`, overdueCount ? `${overdueCount} · ${windowDays} дн.` : `${windowDays} дн.`, { key: `today-overdue-${state.selectedDate}` })}
       </div>` : '';
   root.innerHTML = `
-    <section class="card">
-      <div class="card-title-row">
-        <div>
-          <h2>${state.selectedDate === toISODate(new Date()) ? 'Сегодня' : 'День'} · ${formatHumanDate(state.selectedDate)}</h2>
-          <p class="muted">Краткая сводка выбранного дня.</p>
-        </div>
-      </div>
-      <div class="grid-4">
-        <div class="stat-card"><div class="muted">Выполнение задач</div><div class="stat-value">${progress.pct}%</div><div class="progress"><span style="width:${progress.pct}%"></span></div></div>
-        <div class="stat-card"><div class="muted">Задачи</div><div class="stat-value">${progress.done}/${progress.total}</div></div>
-        <div class="stat-card"><div class="muted">Вес недели</div><div class="stat-value">${weeklyWeight ? `${escapeHTML(weeklyWeight)} кг` : '—'}</div><div class="muted">замер: ${shortDate(weeklyWeightISO)}</div></div>
-        <div class="stat-card"><div class="muted">Траты</div><div class="stat-value">${formatRub(financeSummary.total)}</div></div>
-      </div>
-    </section>
+    ${renderTodaySummaryChips(progress, weeklyWeight, weeklyWeightISO, financeSummary)}
 
     ${renderLocalInsights(state.selectedDate, true)}
 
@@ -922,26 +1058,28 @@ function renderToday() {
       <div class="card today-input-card">
         <div class="card-title-row"><h2>Задачи дня</h2><button class="ghost-button small" data-tab-target="plans">Планы</button></div>
         ${renderTaskAddForm(state.selectedDate, 'today')}
-        ${renderCollapsedBlock('Показать задачи дня', `<div class="task-list" style="margin-top:12px">${renderTaskList(state.selectedDate, true)}</div>`, `${progress.total}`)}
+        ${renderCollapsedBlock('Показать задачи дня', `<div class="task-list" style="margin-top:12px">${renderTaskList(state.selectedDate, true)}</div>`, `${progress.total}`, { key: `today-tasks-${state.selectedDate}` })}
       </div>
       <div class="card today-input-card">
         <div class="card-title-row"><h2>Питание дня</h2><button class="ghost-button small" data-tab-target="food">Питание</button></div>
         ${renderMealAddForm('today')}
-        ${renderCollapsedBlock('Показать питание дня', `<div class="meal-list" style="margin-top:12px">${renderMealList(state.selectedDate)}</div>`, `${health.meals.length}`)}
+        ${renderCollapsedBlock('Показать питание дня', `<div class="meal-list" style="margin-top:12px">${renderMealList(state.selectedDate)}</div>`, `${health.meals.length}`, { key: `today-food-${state.selectedDate}` })}
       </div>
       <div class="card today-input-card today-finance-card">
         <div class="card-title-row"><h2>Финансы дня</h2><button class="ghost-button small" data-tab-target="finance">Финансы</button></div>
-        <div class="finance-summary-line">Доступно сейчас: ${financeContext.availableBalance ? formatRub(financeContext.availableBalance) : 'не указано'}${nextIncome ? ` · ближайшее поступление: ${shortDate(nextIncome.date)} — ${formatRub(nextIncome.amount)}` : ''}</div>
+        <div class="finance-summary-line">Доступно: ${financeContext.availableBalance ? formatRub(financeContext.availableBalance) : 'не указано'}${financeContext.reserveBalance ? ` · активы: ${formatRub(financeContext.reserveBalance)}` : ''}${nextIncome ? ` · ближайшее: ${shortDate(nextIncome.date)} +${formatRub(nextIncome.amount)}` : ''}</div>
         ${renderFinanceQuickForm('today')}
         <div class="finance-summary-line">Потрачено за день: ${formatRub(financeSummary.total)} · еда: ${formatRub(financeSummary.food)} · транспорт: ${formatRub(financeSummary.transport)} · другое: ${formatRub(financeSummary.other)}</div>
-        ${renderCollapsedBlock('Показать операции дня', `<div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, true)}</div>`, `${financeSummary.count}`)}
+        ${renderFinanceNoExpensesButton(state.selectedDate)}
+        ${renderCollapsedBlock('Показать операции дня', `<div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, true)}</div>`, `${financeSummary.count}`, { key: `today-finance-${state.selectedDate}` })}
       </div>
+      ${renderDailyReportCard()}
     </section>
 
     <section class="grid-2">
       <div class="card today-list-card">
         <div class="card-title-row"><h2>Ближайшие важные даты</h2><button class="ghost-button small" data-tab-target="important">Все</button></div>
-        ${renderCollapsedBlock('Показать ближайшие даты', `<div class="important-list">${important || '<div class="empty">Важных дат пока нет.</div>'}</div>`)}
+        ${renderCollapsedBlock('Показать ближайшие даты', `<div class="important-list">${important || '<div class="empty">Важных дат пока нет.</div>'}</div>`, '', { key: `today-important-${state.selectedDate}` })}
       </div>
 ${overdueSection}
     </section>
@@ -960,7 +1098,9 @@ function renderPlans() {
     if (app.settings.showSelectedDayOnly && iso !== state.selectedDate) continue;
     const taskList = renderTaskList(iso, false);
     const hasTasks = getTasks(iso).length > 0;
-    const tasksBlock = `<details class="collapsible-list day-task-details">
+    const detailsKey = `plans-${iso}`;
+    const openAttr = state.expandedSections[detailsKey] ? ' open' : '';
+    const tasksBlock = `<details class="collapsible-list day-task-details" data-details-key="${detailsKey}"${openAttr}>
           <summary>${WEEKDAY_SHORT[i]} · ${shortDate(iso)} · задачи ${progress.done}/${progress.total}${hasTasks ? '' : ' · пусто'}</summary>
           <div class="task-list">${taskList}</div>
         </details>`;
@@ -1003,7 +1143,6 @@ function renderFood() {
   const meals = health.meals.length ? renderMealList(state.selectedDate) : '<div class="empty">Питание за выбранный день пока не записано. Основной быстрый ввод остаётся во вкладке «Сегодня».</div>';
   root.innerHTML = `
     ${renderGptAdviceCard('food')}
-    ${renderLocalInsights(state.selectedDate, true)}
 
     <section class="card">
       <div class="card-title-row">
@@ -1093,63 +1232,63 @@ function renderFinance() {
   const summary = getFinanceSummary();
   const context = getFinanceContext();
   const nextIncome = getNextIncome();
-  const nextObligation = getUpcomingPlanItems(context.obligations, 1)[0] || null;
+  const nextObligation = getUpcomingPlanItems(context.obligations.filter(item => item.status !== 'paid'), 1)[0] || null;
+  const totalUnderControl = moneyNumber(context.availableBalance) + moneyNumber(context.reserveBalance);
   root.innerHTML = `
     ${renderGptAdviceCard('finance')}
-    ${renderLocalInsights(state.selectedDate, true)}
 
-    <section class="grid-3">
-      <div class="stat-card"><div class="muted">Доступно сейчас</div><div class="stat-value">${context.availableBalance ? formatRub(context.availableBalance) : '—'}</div><div class="muted">Финансовая сводка</div></div>
-      <div class="stat-card"><div class="muted">Ближайшее поступление</div><div class="stat-value small-stat">${nextIncome ? formatRub(nextIncome.amount) : '—'}</div><div class="muted">${nextIncome ? `${shortDate(nextIncome.date)} · ${escapeHTML(nextIncome.title || 'поступление')}` : 'не указано'}</div></div>
-      <div class="stat-card"><div class="muted">Ближайший расход</div><div class="stat-value small-stat">${nextObligation ? formatRub(nextObligation.amount) : '—'}</div><div class="muted">${nextObligation ? `${shortDate(nextObligation.date)} · ${escapeHTML(nextObligation.title || 'расход')}` : 'не указан'}</div></div>
+    <section class="grid-3 finance-top-grid">
+      <div class="stat-card"><div class="muted">Доступно сейчас</div><div class="stat-value">${context.availableBalance ? formatRub(context.availableBalance) : '—'}</div><div class="muted">Живой баланс</div></div>
+      <div class="stat-card"><div class="muted">Активы / резерв</div><div class="stat-value small-stat">${context.reserveBalance ? formatRub(context.reserveBalance) : '—'}</div><div class="muted">Не списывается обычными тратами</div></div>
+      <div class="stat-card"><div class="muted">Под контролем</div><div class="stat-value small-stat">${totalUnderControl ? formatRub(totalUnderControl) : '—'}</div><div class="muted">Доступно + активы</div></div>
     </section>
 
     <section class="card">
       <div class="card-title-row">
         <div>
-          <h2>Финансовая сводка</h2>
-          <p class="muted">Общий контекст для недельного отчёта и финансовых подсказок.</p>
+          <h2>Баланс</h2>
+          <p class="muted">Укажи фактическую доступную сумму. Разница автоматически запишется как корректировка, без лишних вопросов.</p>
         </div>
         <button class="icon-button help-button" type="button" data-finance-help title="Как заполнять">?</button>
       </div>
       <form class="form-grid finance-context" data-finance-context-form>
         <label>Доступно сейчас, ₽<input name="availableBalance" inputmode="decimal" placeholder="Напр. 12500" value="${escapeHTML(context.availableBalance || '')}"></label>
-        <button class="primary-button" type="submit">Сохранить</button>
+        <label>Активы / резерв, ₽<input name="reserveBalance" inputmode="decimal" placeholder="Напр. 5000" value="${escapeHTML(context.reserveBalance || '')}"></label>
+        <button class="primary-button" type="submit">Обновить</button>
       </form>
-    </section>
-
-    <section class="grid-2">
-      <div class="card">
-        <div class="card-title-row"><h2>Плановые поступления</h2></div>
-        ${renderFinancePlanForm('income')}
-        ${renderCollapsedBlock('Показать плановые поступления', `<div class="finance-list">${renderFinancePlanList('income')}</div>`, `${context.incomes.length}`)}
-      </div>
-      <div class="card">
-        <div class="card-title-row"><h2>Обязательные расходы</h2></div>
-        ${renderFinancePlanForm('obligation')}
-        ${renderCollapsedBlock('Показать обязательные расходы', `<div class="finance-list">${renderFinancePlanList('obligation')}</div>`, `${context.obligations.length}`)}
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="card-title-row">
-        <div>
-          <h2>Финансовые цели</h2>
-          <p class="muted">До трёх целей: сумма, срок и комментарий.</p>
-        </div>
-      </div>
-      ${renderFinanceGoalsForm(context)}
     </section>
 
     <section class="card">
       <div class="card-title-row">
         <div>
           <h2>Траты выбранного дня</h2>
-          <p class="muted">Краткая сводка по выбранной дате.</p>
+          <p class="muted">Траты уменьшают доступный баланс. Если трат не было — закрой день одной кнопкой.</p>
         </div>
       </div>
       ${renderFinanceDaySummary(summary)}
+      ${renderFinanceQuickForm('finance')}
+      ${renderFinanceNoExpensesButton(state.selectedDate)}
+      <div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, false)}</div>
     </section>
+
+    <section class="grid-2 finance-plan-grid">
+      <div class="card finance-plan-card">
+        ${renderCollapsedBlock('Плановые поступления', `<p class="muted">После кнопки “Получено” сумма попадёт в баланс и историю.</p>${renderFinancePlanForm('income')}<div class="finance-list">${renderFinancePlanList('income')}</div>`, `${context.incomes.filter(item => item.status !== 'received').length}`, { key: 'finance-incomes' })}
+      </div>
+      <div class="card finance-plan-card">
+        ${renderCollapsedBlock('Обязательные расходы', `<p class="muted">После кнопки “Оплачено” сумма спишется с баланса и уйдёт в историю.</p>${renderFinancePlanForm('obligation')}<div class="finance-list">${renderFinancePlanList('obligation')}</div>`, `${context.obligations.filter(item => item.status !== 'paid').length}`, { key: 'finance-obligations' })}
+      </div>
+    </section>
+
+    <details class="card collapsible-list finance-history-details">
+      <summary>История операций · ${context.operations.length}</summary>
+      <div class="finance-list">${renderFinanceOperationsHistory()}</div>
+    </details>
+
+    <details class="card collapsible-list finance-goals-details">
+      <summary>Финансовые цели</summary>
+      ${renderFinanceGoalsForm(context)}
+    </details>
   `;
   bindCommonActions(root);
   bindClick(root, '[data-finance-help]', openFinanceHelpDialog);
@@ -1215,6 +1354,14 @@ function splitFinanceGoals(value) {
   return parseFinanceGoals(value).map(goal => [goal.title, goal.amount, goal.term, goal.comment].filter(Boolean).join(' · '));
 }
 
+function renderFinanceNoExpensesButton(iso = state.selectedDate) {
+  const day = getFinance(iso);
+  if (day.expenses.length) {
+    return '<div class="finance-summary-line muted">День содержит траты — отметка “без трат” отключена.</div>';
+  }
+  return `<button class="ghost-button finance-no-expenses ${day.noExpenses ? 'active' : ''}" type="button" data-finance-no-expenses="${iso}">${day.noExpenses ? '✓ Сегодня не было трат' : 'Сегодня не было трат'}</button>`;
+}
+
 function renderFinanceDaySummary(summary) {
   return `
     <div class="finance-day-summary">
@@ -1240,32 +1387,66 @@ function renderFinancePlanForm(type) {
   `;
 }
 
+function getPlanItemStatusText(item, type) {
+  if (type === 'income' && item.status === 'received') return 'получено';
+  if (type === 'obligation' && item.status === 'paid') return 'оплачено';
+  const today = toISODate(new Date());
+  if (item.date && item.date < today) return type === 'income' ? 'просрочено' : 'просрочен';
+  if (item.date === today) return 'сегодня';
+  return 'ожидается';
+}
+
 function renderFinancePlanList(type) {
   const context = getFinanceContext();
   const list = type === 'income' ? context.incomes : context.obligations;
-  if (!list.length) return `<div class="empty">${type === 'income' ? 'Поступлений пока нет.' : 'Обязательных расходов пока нет.'}</div>`;
-  const sorted = [...list].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99')));
-  const renderItem = item => `
+  const doneStatus = type === 'income' ? 'received' : 'paid';
+  const active = list.filter(item => item.status !== doneStatus);
+  if (!active.length) return `<div class="empty">${type === 'income' ? 'Активных поступлений пока нет.' : 'Активных обязательных расходов пока нет.'}</div>`;
+  const sorted = [...active].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99')));
+  return sorted.map(item => `
       <article class="finance-card">
         <div class="item-top">
           <div>
             <div class="badge-row">
               <span class="badge important">${item.date ? shortDate(item.date) : 'без даты'}</span>
-              <span class="badge secondary">${type === 'income' ? 'поступление' : 'обязательный расход'}</span>
+              <span class="badge secondary">${escapeHTML(getPlanItemStatusText(item, type))}</span>
             </div>
-            <h3>${formatRub(item.amount)}</h3>
+            <h3>${type === 'income' ? '+' : '−'}${formatRub(item.amount)}</h3>
             <p class="muted">${escapeHTML(item.title || (type === 'income' ? 'Поступление' : 'Расход'))}${item.comment ? ` · ${escapeHTML(item.comment)}` : ''}</p>
           </div>
           <div class="actions">
+            <button class="primary-button" data-finance-plan-complete="${item.id}" data-plan-type="${type}">${type === 'income' ? 'Получено' : 'Оплачено'}</button>
             <button class="ghost-button" data-finance-plan-edit="${item.id}" data-plan-type="${type}">Изм.</button>
             <button class="danger-button" data-finance-plan-delete="${item.id}" data-plan-type="${type}">Удал.</button>
           </div>
         </div>
       </article>
-    `;
-  const cards = sorted.map(renderItem).join('');
-  const title = type === 'income' ? 'Список поступлений' : 'Список расходов';
-  return `<details class="collapsible-list finance-plan-details"><summary>${title} · ${sorted.length}</summary><div class="finance-list">${cards}</div></details>`;
+    `).join('');
+}
+
+function renderFinanceOperationsHistory() {
+  const operations = [...getFinanceContext().operations].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 80);
+  if (!operations.length) return '<div class="empty">История пока пустая.</div>';
+  const typeLabel = {
+    expense: 'трата',
+    income: 'поступление',
+    obligation: 'обязательный расход',
+    adjustment: 'корректировка'
+  };
+  return operations.map(op => `
+    <article class="finance-card operation-card">
+      <div class="item-top">
+        <div>
+          <div class="badge-row"><span class="badge secondary">${escapeHTML(typeLabel[op.type] || 'операция')}</span><span class="badge">${shortDate(op.date)}</span></div>
+          <h3>${moneyNumber(op.amount) > 0 ? '+' : ''}${formatRub(op.amount)}</h3>
+          <p class="muted">${escapeHTML(op.title || 'Операция')}${op.comment ? ` · ${escapeHTML(op.comment)}` : ''}</p>
+        </div>
+        <div class="actions">
+          ${op.type === 'adjustment' ? `<button class="danger-button" data-finance-operation-delete="${op.id}">Удал.</button>` : ''}
+        </div>
+      </div>
+    </article>
+  `).join('');
 }
 
 function renderFinanceQuickForm(scope) {
@@ -1290,7 +1471,7 @@ function renderFinanceQuickForm(scope) {
 
 function renderFinanceList(iso, compact = false) {
   const expenses = [...getFinance(iso).expenses].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  if (!expenses.length) return '<div class="empty">Трат пока нет.</div>';
+  if (!expenses.length) return getFinance(iso).noExpenses ? '<div class="empty">День отмечен без трат.</div>' : '<div class="empty">Трат пока нет.</div>';
   const visible = compact ? expenses.slice(0, 4) : expenses;
   return visible.map(expense => renderFinanceCard(expense, compact)).join('') + (compact && expenses.length > 4 ? '<div class="muted finance-summary-line">Показаны последние 4 записи. Полный список во вкладке «Финансы».</div>' : '');
 }
@@ -1626,11 +1807,126 @@ function getPendingPastTasksHTML() {
       <article class="task-card past-task-card">
         <div class="task-top">
           <div><div class="task-text">${escapeHTML(task.text)}</div><div class="badge-row"><span class="badge overdue">${shortDate(iso)}</span><span class="badge ${task.priority}">${PRIORITIES[task.priority] || 'Важно'}</span><span class="badge overdue">Пропущено</span></div></div>
-          <div class="actions"><button class="ghost-button" data-task-move="${task.id}" data-date="${iso}">Перенести</button><button class="ghost-button" data-task-dismiss="${task.id}" data-date="${iso}">Скрыть</button><button class="ghost-button" data-jump-date="${iso}">Открыть день</button></div>
+          <div class="actions past-task-actions">
+            <button class="ghost-button" data-task-complete-past="${task.id}" data-date="${iso}">Выполнено</button>
+            <button class="ghost-button" data-task-move="${task.id}" data-date="${iso}">Перенести</button>
+            <details class="more-actions">
+              <summary class="ghost-button" aria-label="Ещё действия">...</summary>
+              <div class="more-actions-menu">
+                <button class="ghost-button" type="button" data-jump-date="${iso}">Открыть день</button>
+                <button class="ghost-button" type="button" data-task-dismiss="${task.id}" data-date="${iso}">Скрыть</button>
+              </div>
+            </details>
+          </div>
         </div>
       </article>`).join('');
 }
 
+function openPastTaskCompleteDialog(task, iso) {
+  return new Promise(resolve => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'modal-dialog edit-dialog';
+    dialog.innerHTML = `
+      <form method="dialog" class="modal-card edit-form">
+        <div class="card-title-row">
+          <div><h2>Когда задача была выполнена?</h2><p class="muted">${escapeHTML(task.text || 'Задача')} · ${shortDate(iso)}</p></div>
+          <button class="icon-button" value="cancel" type="button" data-modal-cancel aria-label="Закрыть">×</button>
+        </div>
+        <div class="actions modal-actions">
+          <button class="ghost-button" type="button" data-complete-original>В тот день</button>
+          <button class="primary-button" type="button" data-complete-today>Сегодня</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dialog);
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.querySelector('[data-modal-cancel]').onclick = () => finish(null);
+    dialog.querySelector('[data-complete-original]').onclick = () => finish('original');
+    dialog.querySelector('[data-complete-today]').onclick = () => finish('today');
+    dialog.addEventListener('cancel', event => { event.preventDefault(); finish(null); });
+    dialog.showModal();
+  });
+}
+
+
+function openDailyReportDialog() {
+  return new Promise(resolve => {
+    const report = getDailyReport();
+    const dialog = document.createElement('dialog');
+    dialog.className = 'modal-dialog edit-dialog daily-report-dialog';
+    dialog.innerHTML = `
+      <form method="dialog" class="modal-card edit-form daily-report-form">
+        <div class="card-title-row">
+          <div><h2>Итог дня</h2><p class="muted">${formatHumanDate(state.selectedDate)}</p></div>
+          <button class="icon-button" value="cancel" type="button" data-modal-cancel aria-label="Закрыть">×</button>
+        </div>
+        <label class="range-field score-range-field">Самоощущение дня: <strong data-self-score-label>${report.selfScore || '—'}</strong>
+          <input class="score-range" name="selfScore" type="range" min="0" max="100" step="1" value="${escapeHTML(report.selfScore || '50')}">
+          <span class="score-scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></span>
+        </label>
+        <label class="range-field score-range-field">Желание действовать: <strong data-drive-score-label>${report.driveScore || '—'}</strong>
+          <input class="score-range" name="driveScore" type="range" min="0" max="100" step="1" value="${escapeHTML(report.driveScore || '50')}">
+          <span class="score-scale"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></span>
+        </label>
+        <label>Итог дня / мысли<textarea name="text" placeholder="Что произошло, что важно запомнить, почему день ощущается именно так">${escapeHTML(report.text || '')}</textarea></label>
+        <div class="actions modal-actions">
+          <button class="ghost-button" value="cancel" type="button" data-modal-cancel>Отмена</button>
+          <button class="primary-button" value="submit" type="submit">Сохранить</button>
+        </div>
+      </form>`;
+    document.body.appendChild(dialog);
+    const form = dialog.querySelector('form');
+    const self = form.elements.selfScore;
+    const drive = form.elements.driveScore;
+    const selfLabel = dialog.querySelector('[data-self-score-label]');
+    const driveLabel = dialog.querySelector('[data-drive-score-label]');
+    const updateScoreRange = (input, label) => {
+      const snapped = clampScore(input.value) || '0';
+      label.textContent = snapped;
+      input.style.setProperty('--score-pct', `${Number(input.value) || 0}%`);
+    };
+    const snapScoreRange = (input, label) => {
+      input.value = clampScore(input.value) || '0';
+      input.style.setProperty('--score-pct', `${input.value}%`);
+      label.textContent = input.value;
+    };
+    updateScoreRange(self, selfLabel);
+    updateScoreRange(drive, driveLabel);
+    self.oninput = () => updateScoreRange(self, selfLabel);
+    drive.oninput = () => updateScoreRange(drive, driveLabel);
+    self.onchange = () => snapScoreRange(self, selfLabel);
+    drive.onchange = () => snapScoreRange(drive, driveLabel);
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    dialog.querySelectorAll('[data-modal-cancel]').forEach(btn => btn.onclick = () => finish(null));
+    dialog.addEventListener('cancel', event => { event.preventDefault(); finish(null); });
+    form.onsubmit = event => {
+      event.preventDefault();
+      const fd = new FormData(form);
+      const target = getDailyReport();
+      target.selfScore = clampScore(fd.get('selfScore'));
+      target.driveScore = clampScore(fd.get('driveScore'));
+      target.text = String(fd.get('text') || '').trim();
+      target.updatedAt = new Date().toISOString();
+      markChanged();
+      showToast('Итог дня сохранён');
+      finish(target);
+    };
+    dialog.showModal();
+  });
+}
 
 function openEditDialog({ title, fields, submitText = 'Сохранить' }) {
   return new Promise(resolve => {
@@ -1884,9 +2180,62 @@ function openDatePickerDialog(initialISO = state.selectedDate) {
 
 function bindCommonActions(root = document) {
   bindDatePickerControls(root);
+  $$('details[data-details-key]', root).forEach(details => {
+    details.ontoggle = () => {
+      state.expandedSections[details.dataset.detailsKey] = details.open;
+    };
+  });
   $$('[data-tab-target]', root).forEach(btn => btn.onclick = () => setTab(btn.dataset.tabTarget));
   $$('[data-gpt-advice]', root).forEach(btn => btn.onclick = () => openGptAdviceDialog(btn.dataset.gptAdvice || 'today'));
   $$('[data-jump-date]', root).forEach(btn => btn.onclick = () => setSelectedDate(btn.dataset.jumpDate));
+  $$('[data-daily-report-open]', root).forEach(btn => btn.onclick = openDailyReportDialog);
+  $$('[data-local-insights-open]', root).forEach(btn => btn.onclick = openLocalInsightsDialog);
+  $$('[data-finance-no-expenses]', root).forEach(btn => {
+    btn.onclick = () => {
+      const iso = btn.dataset.financeNoExpenses || state.selectedDate;
+      const day = getFinance(iso);
+      if (day.expenses.length) return;
+      day.noExpenses = !day.noExpenses;
+      markChanged();
+      showToast(day.noExpenses ? 'День отмечен без трат' : 'Отметка без трат снята');
+    };
+  });
+  $$('[data-task-complete-past]', root).forEach(btn => {
+    btn.onclick = async () => {
+      const fromDate = btn.dataset.date;
+      const task = findTask(fromDate, btn.dataset.taskCompletePast);
+      if (!task) return;
+      const mode = await openPastTaskCompleteDialog(task, fromDate);
+      if (!mode) return;
+      const nowISO = new Date().toISOString();
+      const today = toISODate(new Date());
+      if (mode === 'original') {
+        task.done = true;
+        task.failed = false;
+        task.dismissed = false;
+        task.completedAt = nowISO;
+        task.completedForDate = fromDate;
+        task.completionMode = 'original';
+        task.originalDate = task.originalDate || fromDate;
+        markChanged();
+        showToast('Задача отмечена выполненной в тот день');
+        return;
+      }
+      app.tasks[fromDate] = getTasks(fromDate).filter(item => item.id !== task.id);
+      task.done = true;
+      task.failed = false;
+      task.dismissed = false;
+      task.originalDate = task.originalDate || fromDate;
+      task.movedFrom = fromDate;
+      task.completedAt = nowISO;
+      task.completedForDate = today;
+      task.completionMode = 'today';
+      getTasks(today).push(task);
+      setSelectedDate(today);
+      showToast('Задача засчитана на сегодня');
+    };
+  });
+
   $$('[data-task-dismiss]', root).forEach(btn => {
     btn.onclick = () => {
       const task = findTask(btn.dataset.date, btn.dataset.taskDismiss);
@@ -1939,7 +2288,8 @@ function bindCommonActions(root = document) {
         dismissed: false,
         subtasks: [],
         note: '',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        originalDate: iso
       });
       markChanged();
       showToast('Задача добавлена');
@@ -1951,7 +2301,16 @@ function bindCommonActions(root = document) {
       const task = findTask(input.dataset.date, input.dataset.taskToggle);
       if (!task) return;
       task.done = input.checked;
-      if (task.done) task.failed = false;
+      if (task.done) {
+        task.failed = false;
+        task.completedAt = task.completedAt || new Date().toISOString();
+        task.completedForDate = input.dataset.date;
+        task.completionMode = task.completionMode || 'same_day';
+      } else {
+        task.completedAt = '';
+        task.completedForDate = '';
+        task.completionMode = '';
+      }
       markChanged();
     };
   });
@@ -2086,7 +2445,9 @@ function bindCommonActions(root = document) {
       const fd = new FormData(form);
       const amount = normalizeMoneyInput(fd.get('amount'));
       if (!amount) return;
-      getFinance().expenses.push({
+      const day = getFinance();
+      day.noExpenses = false;
+      const expense = {
         id: uid('exp'),
         amount,
         category: normalizeFinanceCategory(fd.get('category')),
@@ -2094,7 +2455,10 @@ function bindCommonActions(root = document) {
         comment: String(fd.get('comment') || '').trim(),
         time: fd.get('time') || '',
         createdAt: new Date().toISOString()
-      });
+      };
+      day.expenses.push(expense);
+      addAvailableBalance(-moneyNumber(amount));
+      addFinanceOperation('expense', -moneyNumber(amount), getFinanceCategoryLabel(expense.category), expense.comment, expense.id, state.selectedDate);
       markChanged();
       showToast('Трата добавлена');
     };
@@ -2104,7 +2468,10 @@ function bindCommonActions(root = document) {
     btn.onclick = async () => {
       if (!await openConfirmDialog('Удалить трату?')) return;
       const day = getFinance();
+      const expense = day.expenses.find(item => item.id === btn.dataset.financeDelete);
+      if (expense) addAvailableBalance(moneyNumber(expense.amount));
       day.expenses = day.expenses.filter(expense => expense.id !== btn.dataset.financeDelete);
+      getFinanceContext().operations = getFinanceContext().operations.filter(op => op.sourceId !== btn.dataset.financeDelete);
       markChanged();
     };
   });
@@ -2126,11 +2493,19 @@ function bindCommonActions(root = document) {
       if (!result) return;
       const amount = normalizeMoneyInput(result.amount);
       if (!amount) return;
+      const oldAmount = moneyNumber(expense.amount);
       expense.amount = amount;
       expense.category = normalizeFinanceCategory(result.category);
       expense.reason = normalizeFinanceReason(result.reason);
       expense.comment = String(result.comment || '').trim();
       expense.time = String(result.time || '').trim();
+      addAvailableBalance(oldAmount - moneyNumber(amount));
+      const op = getFinanceContext().operations.find(item => item.sourceId === expense.id && item.type === 'expense');
+      if (op) {
+        op.amount = String(-moneyNumber(amount));
+        op.title = getFinanceCategoryLabel(expense.category);
+        op.comment = expense.comment;
+      }
       markChanged();
     };
   });
@@ -2141,9 +2516,10 @@ function bindCommonActions(root = document) {
       event.preventDefault();
       const fd = new FormData(form);
       const context = getFinanceContext();
-      context.availableBalance = normalizeMoneyInput(fd.get('availableBalance'));
+      const diff = applyBalanceCorrection(fd.get('availableBalance'));
+      context.reserveBalance = normalizeMoneyInput(fd.get('reserveBalance'));
       markChanged();
-      showToast('Финансовая сводка сохранена');
+      showToast(diff ? `Баланс обновлён: ${diff > 0 ? '+' : ''}${formatRub(diff)}` : 'Баланс сохранён');
     };
   });
 
@@ -2169,6 +2545,8 @@ function bindCommonActions(root = document) {
         date: normalizeDateInput(fd.get('date')),
         title: String(fd.get('title') || '').trim(),
         comment: String(fd.get('comment') || '').trim(),
+        status: 'planned',
+        completedAt: '',
         createdAt: new Date().toISOString()
       };
       const context = getFinanceContext();
@@ -2176,6 +2554,42 @@ function bindCommonActions(root = document) {
       else context.obligations.push(item);
       markChanged();
       showToast(form.dataset.financePlanForm === 'income' ? 'Поступление добавлено' : 'Обязательный расход добавлен');
+    };
+  });
+
+  $$('[data-finance-plan-complete]', root).forEach(btn => {
+    btn.onclick = () => {
+      const context = getFinanceContext();
+      const type = btn.dataset.planType;
+      const key = type === 'income' ? 'incomes' : 'obligations';
+      const item = context[key].find(entry => entry.id === btn.dataset.financePlanComplete);
+      if (!item || item.status !== 'planned') return;
+      item.status = type === 'income' ? 'received' : 'paid';
+      item.completedAt = new Date().toISOString();
+      const amount = moneyNumber(item.amount);
+      if (type === 'income') {
+        addAvailableBalance(amount);
+        addFinanceOperation('income', amount, item.title || 'Поступление', item.comment, item.id, item.date || state.selectedDate);
+        showToast('Поступление добавлено в баланс');
+      } else {
+        addAvailableBalance(-amount);
+        addFinanceOperation('obligation', -amount, item.title || 'Обязательный расход', item.comment, item.id, item.date || state.selectedDate);
+        showToast('Обязательный расход списан');
+      }
+      markChanged();
+    };
+  });
+
+  $$('[data-finance-operation-delete]', root).forEach(btn => {
+    btn.onclick = async () => {
+      const context = getFinanceContext();
+      const op = context.operations.find(item => item.id === btn.dataset.financeOperationDelete);
+      if (!op || op.type !== 'adjustment') return;
+      if (!await openConfirmDialog('Удалить корректировку баланса?')) return;
+      addAvailableBalance(-moneyNumber(op.amount));
+      context.operations = context.operations.filter(item => item.id !== op.id);
+      markChanged();
+      showToast('Корректировка удалена');
     };
   });
 
@@ -2334,15 +2748,22 @@ function applyImportedData(normalized) {
 function buildGptReport() {
   const monday = getMondayISO(state.selectedDate);
   const context = getFinanceContext();
-  const incomeLines = context.incomes.length
-    ? [...context.incomes].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99'))).map(item => `  - ${item.date ? shortDate(item.date) : 'без даты'} · ${formatRub(item.amount)} · ${item.title || 'поступление'}${item.comment ? ` · ${item.comment}` : ''}`).join('\n')
+  const formatPlan = (items, type) => items.length
+    ? [...items].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99'))).map(item => {
+        const status = type === 'income'
+          ? (item.status === 'received' ? 'получено' : getPlanItemStatusText(item, 'income'))
+          : (item.status === 'paid' ? 'оплачено' : getPlanItemStatusText(item, 'obligation'));
+        return `  - ${item.date ? shortDate(item.date) : 'без даты'} · ${formatRub(item.amount)} · ${item.title || (type === 'income' ? 'поступление' : 'обязательный расход')} · ${status}${item.comment ? ` · ${item.comment}` : ''}`;
+      }).join('\n')
     : '  - не указаны';
-  const obligationLines = context.obligations.length
-    ? [...context.obligations].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99'))).map(item => `  - ${item.date ? shortDate(item.date) : 'без даты'} · ${formatRub(item.amount)} · ${item.title || 'обязательный расход'}${item.comment ? ` · ${item.comment}` : ''}`).join('\n')
-    : '  - не указаны';
+  const incomeLines = formatPlan(context.incomes, 'income');
+  const obligationLines = formatPlan(context.obligations, 'obligation');
+  const operationLines = context.operations.length
+    ? context.operations.slice(0, 40).map(op => `  - ${shortDate(op.date)} · ${op.type} · ${moneyNumber(op.amount) > 0 ? '+' : ''}${formatRub(op.amount)} · ${op.title || 'операция'}${op.comment ? ` · ${op.comment}` : ''}`).join('\n')
+    : '  - операций пока нет';
   const lines = [`Отчёт TSB Hub за неделю ${shortDate(monday)} — ${shortDate(addDays(monday, 6))}`];
   const goalLines = context.savingGoal ? context.savingGoal.split('\n').map(line => `  - ${line}`).join('\n') : '  - не указано';
-  lines.push(`\nФинансовый контекст:\n  Доступно сейчас: ${context.availableBalance ? formatRub(context.availableBalance) : 'не указано'}\n  Финансовые цели:\n${goalLines}\n  Плановые поступления:\n${incomeLines}\n  Обязательные расходы:\n${obligationLines}`);
+  lines.push(`\nФинансовый контекст:\n  Доступно сейчас: ${context.availableBalance ? formatRub(context.availableBalance) : 'не указано'}\n  Активы / резерв: ${context.reserveBalance ? formatRub(context.reserveBalance) : 'не указано'}\n  Финансовые цели:\n${goalLines}\n  Плановые поступления:\n${incomeLines}\n  Обязательные расходы:\n${obligationLines}\n  История операций / корректировки:\n${operationLines}`);
   const currentPlan = getGptPlan();
   if (currentPlan.text) {
     lines.push(`\nТекущий план от GPT на эту неделю уже сохранён в приложении:\n${currentPlan.text}`);
@@ -2354,6 +2775,10 @@ function buildGptReport() {
     const progress = getProgress(iso);
     const finance = getFinance(iso);
     const financeSummary = getFinanceSummary(iso);
+    const report = getDailyReport(iso);
+    const reportLine = hasDailyReport(iso)
+      ? `самоощущение ${report.selfScore || '—'}/100, желание действовать ${report.driveScore || '—'}/100, итог: ${report.text || 'без текста'}`
+      : 'не заполнен';
     const mealLines = health.meals.length
       ? health.meals.map(meal => `    - ${meal.time || 'без времени'} · ${meal.name}${meal.amount ? ` (${meal.amount})` : ''}`).join('\n')
       : '    - питания не записано';
@@ -2362,10 +2787,10 @@ function buildGptReport() {
       : '    - задач нет';
     const financeLines = finance.expenses.length
       ? finance.expenses.map(expense => `    - ${expense.time || 'без времени'} · ${getFinanceCategoryLabel(expense.category)} · ${formatRub(expense.amount)}${getFinanceReasonLabel(expense.reason) ? ` · причина: ${getFinanceReasonLabel(expense.reason)}` : ''}${expense.comment ? ` · ${expense.comment}` : ''}`).join('\n')
-      : '    - трат не записано';
-    lines.push(`\n${WEEKDAY_SHORT[i]} · ${formatHumanDate(iso)}\n  Задачи: ${progress.done}/${progress.total}, выполнение ${progress.pct}%\n${taskLines}\n  Питание:\n${mealLines}\n  Вес: ${health.weight ? `${health.weight} кг` : 'не указан'}\n  Активность: ${health.activityNote || 'не указана'}\n  Заметка: ${health.note || 'нет'}\n  Финансы: всего ${formatRub(financeSummary.total)}, еда ${formatRub(financeSummary.food)}, транспорт ${formatRub(financeSummary.transport)}, другое ${formatRub(financeSummary.other)}, эмоциональные/импульсивные траты ${formatRub(financeSummary.impulse)}\n${financeLines}\n  Локальные подсказки:\n${getLocalInsightsReportText(iso)}`);
+      : (finance.noExpenses ? '    - день отмечен без трат' : '    - трат не записано');
+    lines.push(`\n${WEEKDAY_SHORT[i]} · ${formatHumanDate(iso)}\n  Ежедневный отчёт: ${reportLine}\n  Задачи: ${progress.done}/${progress.total}, выполнение ${progress.pct}%\n${taskLines}\n  Питание:\n${mealLines}\n  Вес: ${health.weight ? `${health.weight} кг` : 'не указан'}\n  Активность: ${health.activityNote || 'не указана'}\n  Заметка: ${health.note || 'нет'}\n  Финансы: всего ${formatRub(financeSummary.total)}, еда ${formatRub(financeSummary.food)}, транспорт ${formatRub(financeSummary.transport)}, другое ${formatRub(financeSummary.other)}, эмоциональные/импульсивные траты ${formatRub(financeSummary.impulse)}\n${financeLines}\n  Локальные подсказки:\n${getLocalInsightsReportText(iso)}`);
   }
-  lines.push("\nЗапрос к GPT: проанализируй все данные недели в контексте TSB Hub: задачи, незавершёнку, питание, вес, активность, заметки, локальные подсказки, дневные траты, плановые поступления, обязательные расходы и финансовые цели. Сам оцени финансовую ситуацию пользователя на следующую неделю и объясни вывод по данным. Проверь, где можно сократить расходы без вреда для базовых нужд, отдельно разберись с едой, транспортом, импульсивными/стрессовыми тратами и днями перегруза. Составь план на следующую неделю по дням: деньги, питание, задачи, отдых/нагрузка. Любые идеи по накоплениям и вложениям предлагай только если после обязательных расходов, еды, транспорта и минимального резерва реально остаются свободные деньги. Учитывай несколько финансовых целей и предложи реалистичный месячный доход/накопление, если данных хватает. В конце дай структурированный блок 'План на неделю' и отдельные блоки 'Совет на сегодня', 'Финансовые советы', 'Советы по питанию', 'Советы по задачам', чтобы их можно было вставить обратно в TSB Hub.");
+  lines.push("\nЗапрос к GPT: проанализируй все данные недели в контексте TSB Hub: задачи, незавершёнку, питание, вес, активность, заметки, локальные подсказки, дневные траты, дни без трат, ежедневные отчёты, живой баланс, активы/резерв, операции, корректировки баланса, плановые поступления, обязательные расходы и финансовые цели. Сам оцени финансовую ситуацию пользователя на следующую неделю и объясни вывод по данным. Не дави предупреждениями о нехватке денег: если денег не хватает, дай спокойный практический план без морализаторства. Проверь, где можно сократить расходы без вреда для базовых нужд, отдельно разберись с едой, транспортом, импульсивными/стрессовыми тратами и днями перегруза. Составь план на следующую неделю по дням: деньги, питание, задачи, отдых/нагрузка. Любые идеи по накоплениям и вложениям предлагай только если после обязательных расходов, еды, транспорта и минимального резерва реально остаются свободные деньги. Учитывай несколько финансовых целей и предложи реалистичный месячный доход/накопление, если данных хватает. В конце дай структурированный блок 'План на неделю' и отдельные блоки 'Совет на сегодня', 'Финансовые советы', 'Советы по питанию', 'Советы по задачам', чтобы их можно было вставить обратно в TSB Hub.");
   return lines.join('\n');
 }
 
@@ -2393,10 +2818,23 @@ async function copyText(text) {
 
 function showToast(message) {
   const toast = $('#toast');
+  if (!toast) return;
   toast.textContent = message;
-  toast.classList.add('show');
+  toast.hidden = false;
+  toast.classList.remove('hide');
+  requestAnimationFrame(() => toast.classList.add('show'));
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+    toast.classList.add('hide');
+    window.setTimeout(() => {
+      if (!toast.classList.contains('show')) {
+        toast.textContent = '';
+        toast.hidden = true;
+        toast.classList.remove('hide');
+      }
+    }, 260);
+  }, 2200);
 }
 
 
@@ -2404,7 +2842,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.8.17-dev')
+    navigator.serviceWorker.register('./service-worker.js?v=0.8.21-dev')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;
@@ -2442,6 +2880,40 @@ function getPwaStatusHTML() {
   `;
 }
 
+function closeMobileTabMenu() {
+  const fab = $('#mobileTabFab');
+  const toggle = $('#mobileTabToggle');
+  const menu = $('#mobileTabMenu');
+  if (!fab || !toggle || !menu) return;
+  fab.classList.remove('open');
+  toggle.setAttribute('aria-expanded', 'false');
+  menu.setAttribute('aria-hidden', 'true');
+}
+
+function setupMobileTabMenu() {
+  const fab = $('#mobileTabFab');
+  const toggle = $('#mobileTabToggle');
+  const menu = $('#mobileTabMenu');
+  if (!fab || !toggle || !menu) return;
+  toggle.onclick = event => {
+    event.stopPropagation();
+    const open = !fab.classList.contains('open');
+    fab.classList.toggle('open', open);
+    toggle.setAttribute('aria-expanded', String(open));
+    menu.setAttribute('aria-hidden', String(!open));
+  };
+  $$('[data-tab-target]', menu).forEach(btn => btn.onclick = () => { setTab(btn.dataset.tabTarget); closeMobileTabMenu(); });
+  document.addEventListener('click', event => { if (!fab.contains(event.target)) closeMobileTabMenu(); });
+  document.addEventListener('focusin', event => {
+    if (event.target.matches('input, textarea, select')) document.body.classList.add('input-focus');
+  });
+  document.addEventListener('focusout', () => {
+    window.setTimeout(() => {
+      if (!document.activeElement || !document.activeElement.matches('input, textarea, select')) document.body.classList.remove('input-focus');
+    }, 80);
+  });
+}
+
 function setupEvents() {
   $('#prevDayBtn').onclick = () => setSelectedDate(addDays(state.selectedDate, -1));
   $('#nextDayBtn').onclick = () => setSelectedDate(addDays(state.selectedDate, 1));
@@ -2449,6 +2921,7 @@ function setupEvents() {
   $('#openCalendarBtn').onclick = () => $('#calendarDialog').showModal();
   $('#closeCalendarBtn').onclick = () => $('#calendarDialog').close();
   $$('.tab-button').forEach(btn => btn.onclick = () => setTab(btn.dataset.tab));
+  setupMobileTabMenu();
 
   registerServiceWorker();
 }

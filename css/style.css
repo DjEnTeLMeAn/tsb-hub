@@ -802,7 +802,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .finance-goals-field textarea { min-height: 42px; }
 .finance-note-card { background: rgba(15,23,42,.58); }
 
-/* История стилей: исправление финансов 0.8.17 — дневные траты, цели и фиксированные модальные окна */
+/* История стилей: исправление финансов 0.8.21 — дневные траты, цели и фиксированные модальные окна */
 .modal-dialog {
   max-width: calc(100vw - 24px);
 }
@@ -875,7 +875,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* История стилей: UX 0.8.17 — вкладки просмотра, цели и сворачивание дней */
+/* История стилей: UX 0.8.21 — вкладки просмотра, цели и сворачивание дней */
 .day-task-details { margin-top: 10px; }
 .day-task-details > summary { min-height: 40px; font-size: .92rem; }
 .finance-goals-list { grid-template-columns: 1fr; }
@@ -897,7 +897,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .form-grid.finance-context { grid-template-columns: 1fr; }
 }
 
-/* UX 0.8.17 — выравнивание карточек, кнопок и сворачиваемых списков */
+/* UX 0.8.21 — выравнивание карточек, кнопок и сворачиваемых списков */
 .card-title-row {
   align-items: flex-start;
 }
@@ -949,7 +949,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* История стилей: мобильная навигация 0.8.17 — панель не перекрывает контент */
+/* История стилей: мобильная навигация 0.8.21 — панель не перекрывает контент */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(156px + env(safe-area-inset-bottom)) !important;
@@ -1001,7 +1001,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 }
 
 
-/* UX 0.8.17 — мобильные вкладки чуть крупнее, без вылезания текста */
+/* UX 0.8.21 — мобильные вкладки чуть крупнее, без вылезания текста */
 @media (max-width: 900px) {
   .app-shell {
     padding-bottom: calc(172px + env(safe-area-inset-bottom)) !important;
@@ -1050,7 +1050,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* UX 0.8.17 — убрать визуальный черный круг/лишний акцент у плавающей навигации */
+/* UX 0.8.21 — убрать визуальный черный круг/лишний акцент у плавающей навигации */
 @media (max-width: 900px) {
   .tabs {
     display: grid !important;
@@ -1090,7 +1090,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
-/* UX 0.8.17 — чистая мобильная навигация без тёмного артефакта между последними вкладками */
+/* UX 0.8.21 — чистая мобильная навигация без тёмного артефакта между последними вкладками */
 @media (max-width: 900px) {
   .tabs {
     display: grid !important;
@@ -1179,4 +1179,338 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .app-shell {
     padding-bottom: calc(200px + env(safe-area-inset-bottom)) !important;
   }
+}
+
+/* UX 0.8.21 — компактная главная, отчёт дня, нормальный toast и мобильная кнопка разделов */
+.today-summary-compact { padding-bottom: 14px; }
+.compact-title-row { margin-bottom: 10px; }
+.summary-chip-row,
+.daily-report-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .22);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-weight: 800;
+  font-size: .88rem;
+  line-height: 1.1;
+}
+.summary-chip small { color: var(--muted); font-weight: 700; }
+.daily-report-card { gap: 12px; }
+.daily-report-preview { line-height: 1.45; }
+.range-field {
+  display: grid;
+  gap: 8px;
+}
+.range-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.finance-no-expenses {
+  width: fit-content;
+  margin-top: 10px;
+}
+.finance-no-expenses.active {
+  border-color: rgba(34, 197, 94, .55);
+  background: rgba(34, 197, 94, .12);
+}
+.toast[hidden] { display: none !important; }
+.toast {
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .22s ease, opacity .22s ease;
+  min-width: 0;
+  min-height: 0;
+}
+.toast.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.toast.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.mobile-tab-fab { display: none; }
+.mobile-tab-menu [data-tab-target].active {
+  border-color: rgba(139, 92, 246, .72);
+  background: rgba(139, 92, 246, .18);
+}
+@media (max-width: 900px) {
+  .app-shell {
+    padding-bottom: calc(34px + env(safe-area-inset-bottom)) !important;
+  }
+  .content-panel,
+  .tab-page.active::after {
+    padding-bottom: 0;
+    height: 0;
+  }
+  .tabs {
+    display: none !important;
+  }
+  .mobile-tab-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    z-index: 30;
+    display: block;
+  }
+  .mobile-tab-button {
+    width: 56px;
+    height: 56px;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, .28);
+    background: linear-gradient(135deg, rgba(139,92,246,.92), rgba(6,182,212,.82));
+    color: white;
+    box-shadow: 0 18px 42px rgba(0,0,0,.42);
+    font-size: 1.45rem;
+    display: grid;
+    place-items: center;
+  }
+  .mobile-tab-menu {
+    position: absolute;
+    right: 0;
+    bottom: 66px;
+    width: min(250px, calc(100vw - 32px));
+    display: none;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: rgba(15, 23, 42, .96);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(14px);
+  }
+  .mobile-tab-fab.open .mobile-tab-menu { display: grid; }
+  .mobile-tab-menu button {
+    min-height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(255,255,255,.04);
+    color: var(--text);
+    text-align: left;
+    padding: 0 12px;
+    font-weight: 800;
+  }
+  body.input-focus .mobile-tab-fab { display: none; }
+}
+@media (max-width: 520px) {
+  .summary-chip { font-size: .82rem; padding: 6px 9px; min-height: 30px; }
+  .today-summary-compact .card-title-row h2 { font-size: 1.08rem; }
+  .daily-report-card .primary-button { width: 100%; }
+}
+
+/* 0.8.21: ползунки отчёта — плавное движение и подписи по реальным точкам бегунка */
+.score-range-field {
+  --score-thumb: 22px;
+  gap: 9px;
+}
+.score-range {
+  --score-pct: 50%;
+  width: 100%;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.score-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0 var(--score-pct), rgba(148,163,184,.28) var(--score-pct) 100%);
+  transition: background .18s linear;
+}
+.score-range::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--score-thumb);
+  height: var(--score-thumb);
+  margin-top: -7px;
+  border-radius: 999px;
+  border: 3px solid rgba(248,250,252,.94);
+  background: var(--accent);
+  box-shadow: 0 8px 22px rgba(0,0,0,.32), 0 0 0 5px rgba(139,92,246,.10);
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+.score-range:active::-webkit-slider-thumb {
+  transform: scale(1.08);
+  box-shadow: 0 10px 26px rgba(0,0,0,.36), 0 0 0 7px rgba(139,92,246,.14);
+}
+.score-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148,163,184,.28);
+}
+.score-range::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: background .18s linear;
+}
+.score-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 3px solid rgba(248,250,252,.94);
+  background: var(--accent);
+  box-shadow: 0 8px 22px rgba(0,0,0,.32), 0 0 0 5px rgba(139,92,246,.10);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.score-range:active::-moz-range-thumb { transform: scale(1.08); }
+.score-scale {
+  position: relative;
+  height: 18px;
+  margin: -1px 0 0;
+  font-size: .72rem;
+  color: var(--muted);
+}
+.score-scale span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  width: 34px;
+  text-align: center;
+  line-height: 1.2;
+}
+.score-scale span:nth-child(1) { left: calc(var(--score-thumb) / 2); }
+.score-scale span:nth-child(2) { left: calc(var(--score-thumb) / 2 + (100% - var(--score-thumb)) / 4); }
+.score-scale span:nth-child(3) { left: calc(var(--score-thumb) / 2 + (100% - var(--score-thumb)) / 2); }
+.score-scale span:nth-child(4) { left: calc(100% - var(--score-thumb) / 2 - (100% - var(--score-thumb)) / 4); }
+.score-scale span:nth-child(5) { left: calc(100% - var(--score-thumb) / 2); }
+.finance-plan-card {
+  padding: 0;
+}
+.finance-plan-card > .collapsible-list {
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+.finance-plan-card > .collapsible-list summary {
+  padding: 18px 18px 14px;
+}
+.finance-plan-card > .collapsible-list > p,
+.finance-plan-card > .collapsible-list > form,
+.finance-plan-card > .collapsible-list > .finance-list {
+  margin-left: 18px;
+  margin-right: 18px;
+}
+.finance-plan-card > .collapsible-list > .finance-list {
+  margin-bottom: 18px;
+}
+
+
+/* 0.8.21: пропущенные задачи — основные действия текстом, редкие действия в меню */
+.past-task-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.more-actions {
+  position: relative;
+}
+.more-actions summary {
+  list-style: none;
+  cursor: pointer;
+}
+.more-actions summary::-webkit-details-marker { display: none; }
+.more-actions-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 12;
+  min-width: 172px;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, .97);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+.more-actions-menu .ghost-button {
+  justify-content: flex-start;
+  width: 100%;
+}
+@media (max-width: 520px) {
+  .past-task-actions { justify-content: flex-start; }
+  .more-actions-menu { right: auto; left: 0; }
+}
+
+/* 0.8.21: подсказки появляются мягче, без резкого ощущения скачка */
+.insight-card,
+.insight-item {
+  animation: softAppear .22s ease both;
+}
+@keyframes softAppear {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 0.8.21: навигация-книжка вместо постоянной панели на всех размерах */
+.tabs { display: none !important; }
+.mobile-tab-fab {
+  position: fixed;
+  right: 16px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: block;
+}
+.mobile-tab-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  background: linear-gradient(135deg, rgba(139,92,246,.92), rgba(6,182,212,.82));
+  color: white;
+  box-shadow: 0 18px 42px rgba(0,0,0,.42);
+  font-size: 1.45rem;
+  display: grid;
+  place-items: center;
+}
+.mobile-tab-menu {
+  position: absolute;
+  right: 0;
+  bottom: 66px;
+  width: min(250px, calc(100vw - 32px));
+  display: none;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, .96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+.mobile-tab-fab.open .mobile-tab-menu { display: grid; }
+.mobile-tab-menu button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  text-align: left;
+  padding: 0 12px;
+  font-weight: 800;
+}
+body.input-focus .mobile-tab-fab { display: none !important; }
+.app-shell { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+@media (max-width: 900px) {
+  .app-shell { padding-bottom: calc(34px + env(safe-area-inset-bottom)) !important; }
+}
+
+/* 0.8.21: запас снизу, чтобы кнопка-книжка не закрывала последние кнопки */
+.app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+@media (max-width: 900px) {
+  .app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
 }

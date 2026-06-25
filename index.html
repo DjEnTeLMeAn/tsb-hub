@@ -4,11 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
-  <title>TSB Hub v0.8.17-dev</title>
-  <link rel="manifest" href="manifest.json?v=0.8.17-dev" />
+  <title>TSB Hub v0.8.21-dev</title>
+  <link rel="manifest" href="manifest.json?v=0.8.21-dev" />
   <link rel="icon" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=0.8.17-dev" />
+  <link rel="stylesheet" href="css/style.css?v=0.8.21-dev" />
 </head>
 <body>
   <div class="app-shell">
@@ -17,7 +17,7 @@
         <div class="brand-mark">TSB</div>
         <div>
           <h1>TSB Hub</h1>
-          <p>v0.8.17-dev</p>
+          <p>v0.8.21-dev</p>
         </div>
       </div>
       <div class="date-switcher" aria-label="Выбранная дата">
@@ -76,6 +76,19 @@
     </main>
   </div>
 
+  <div class="mobile-tab-fab" id="mobileTabFab" aria-label="Разделы">
+    <button class="mobile-tab-button" id="mobileTabToggle" type="button" aria-expanded="false" title="Разделы приложения">📖</button>
+    <div class="mobile-tab-menu" id="mobileTabMenu" aria-hidden="true">
+      <button data-tab-target="today">Сегодня</button>
+      <button data-tab-target="plans">Планы</button>
+      <button data-tab-target="food">Питание</button>
+      <button data-tab-target="finance">Финансы</button>
+      <button data-tab-target="important">Важное</button>
+      <button data-tab-target="sync">Синхронизация</button>
+      <button data-tab-target="settings">Настройки</button>
+    </div>
+  </div>
+
   <dialog id="calendarDialog" class="modal-dialog">
     <div class="modal-card">
       <div class="card-title-row">
@@ -88,6 +101,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script defer src="js/app.js?v=0.8.17-dev"></script>
+  <script defer src="js/app.js?v=0.8.21-dev"></script>
 </body>
 </html>

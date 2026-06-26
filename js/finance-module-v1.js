@@ -1,7 +1,6 @@
-// TSB Hub v0.9.0 - Finance v1.
-// One finance module: screen, balance editing, real-data history, and handlers.
+// TSB Hub v0.9.1 - Finance v1 simplified.
+// One finance module: simple money screen, real-data history, and handlers.
 (function(){
-  const DAY=86400000;
   const todayISO=()=>toISODate(new Date());
   const money=v=>moneyNumber(v)||0;
   const fmt=v=>formatRub(String(v||0));
@@ -15,36 +14,27 @@
     if(!match)return '';
     return sign+String(Math.round(Number(match[0])*100)/100);
   }
-  function daysBetween(a,b){return Math.max(0,Math.round((fromISODate(b)-fromISODate(a))/DAY))}
-  function addLocalDays(iso,n){return addDays(iso,n)}
   function planned(list){return (list||[]).filter(x=>x.status==='planned')}
   function upcoming(list,base=todayISO()){
     return planned(list).filter(x=>!hasDate(x.date)||x.date>=base).sort((a,b)=>String(a.date||'9999-99-99').localeCompare(String(b.date||'9999-99-99')));
   }
-  function nextIncome(ctx,base=todayISO()){return upcoming(ctx.incomes,base).find(x=>hasDate(x.date))||null}
-  function horizon(ctx,base=todayISO()){return nextIncome(ctx,base)?.date||addLocalDays(base,7)}
-  function requiredUntil(ctx,end,base=todayISO()){
-    return upcoming(ctx.obligations,base).filter(x=>hasDate(x.date)&&x.date<=end).reduce((s,x)=>s+money(x.amount),0);
+  function nearestObligations(ctx,base=todayISO()){
+    return upcoming(ctx.obligations,base).filter(x=>hasDate(x.date)).slice(0,5);
   }
-  function todaySpent(base=todayISO()){return getFinanceSummary(base).total||0}
+  function requiredSoon(ctx){
+    return nearestObligations(ctx).reduce((s,x)=>s+money(x.amount),0);
+  }
   function financeSnapshot(){
     const ctx=getFinanceContext();
-    const base=todayISO();
-    const end=horizon(ctx,base);
     const available=money(ctx.availableBalance);
     const reserve=money(ctx.reserveBalance);
-    const required=requiredUntil(ctx,end,base);
+    const required=requiredSoon(ctx);
     const free=available-required;
-    const days=Math.max(1,daysBetween(base,end)+1);
-    const limit=Math.floor(free/days);
-    const spent=todaySpent(base);
-    const left=limit-spent;
-    let status='Нормально',tone='good',note=`До ${shortDate(end)} лимит около ${fmt(Math.max(0,limit))} в день.`;
-    if(!ctx.availableBalance){status='Нет баланса';tone='empty';note='Укажи баланс через “Настроить баланс”.'}
-    else if(free<0){status='Не хватает';tone='bad';note=`До ${shortDate(end)} не хватает ${fmt(Math.abs(free))}.`}
-    else if(limit<500){status='Жёстко экономить';tone='bad';note=`Лимит очень низкий до ${shortDate(end)}.`}
-    else if(limit<1000){status='Осторожно';tone='warn';note=`Лучше держать траты около ${fmt(limit)} в день.`}
-    return{ctx,base,end,available,reserve,required,free,limit,spent,left,status,tone,note};
+    let status='Нормально',tone='good',note='Показываются только понятные суммы: карта, резерв и ближайшие обязательные оплаты.';
+    if(!ctx.availableBalance){status='Нет баланса';tone='empty';note='Укажи деньги на карте через “Изменить карту и резерв”.'}
+    else if(free<0){status='Не хватает';tone='bad';note=`По ближайшим оплатам не хватает ${fmt(Math.abs(free))}.`}
+    else if(required>0){status='Есть обязательные оплаты';tone='warn';note=`После ближайших оплат останется примерно ${fmt(free)}.`}
+    return{ctx,available,reserve,required,free,status,tone,note};
   }
   function allExpenseRows(){
     const rows=[];
@@ -73,7 +63,7 @@
     return [...obl,...inc].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
   }
   function moneyStateHTML(s){
-    return `<section class="card finance-v1-hero finance-v1-${s.tone}"><div class="finance-v1-status"><span class="badge">${safe(s.status)}</span><span class="muted">${shortDate(s.base)} → ${shortDate(s.end)}</span></div><h2>Финансы</h2><p class="muted">${safe(s.note)}</p><div class="finance-v1-grid"><div class="stat-card main"><div class="muted">Лимит на день</div><div class="stat-value">${s.ctx.availableBalance?fmt(Math.max(0,s.limit)):'—'}</div></div><div class="stat-card"><div class="muted">Осталось сегодня</div><div class="stat-value small-stat">${s.ctx.availableBalance?fmt(s.left):'—'}</div></div><div class="stat-card"><div class="muted">На карте</div><div class="stat-value small-stat">${s.ctx.availableBalance?fmt(s.available):'—'}</div></div><div class="stat-card"><div class="muted">Свободно на жизнь</div><div class="stat-value small-stat">${s.ctx.availableBalance?fmt(s.free):'—'}</div></div><div class="stat-card"><div class="muted">Резерв</div><div class="stat-value small-stat">${s.ctx.reserveBalance?fmt(s.reserve):'—'}</div></div><div class="stat-card"><div class="muted">Обязательное скоро</div><div class="stat-value small-stat">${fmt(s.required)}</div></div></div><button class="ghost-button" type="button" data-finance-balance-open>Настроить баланс</button></section>`;
+    return `<section class="card finance-v1-hero finance-v1-${s.tone}"><div class="finance-v1-status"><span class="badge">${safe(s.status)}</span><span class="muted">Деньги сейчас</span></div><h2>Финансы</h2><p class="muted">${safe(s.note)}</p><div class="finance-v1-grid"><div class="stat-card main"><div class="muted">На карте</div><div class="stat-value">${s.ctx.availableBalance?fmt(s.available):'—'}</div></div><div class="stat-card"><div class="muted">Резерв</div><div class="stat-value small-stat">${s.ctx.reserveBalance?fmt(s.reserve):'—'}</div></div><div class="stat-card"><div class="muted">Свободно на жизнь</div><div class="stat-value small-stat">${s.ctx.availableBalance?fmt(s.free):'—'}</div></div><div class="stat-card"><div class="muted">Обязательное скоро</div><div class="stat-value small-stat">${fmt(s.required)}</div></div></div><button class="ghost-button" type="button" data-finance-balance-open>Изменить карту и резерв</button></section>`;
   }
   function expenseFormHTML(){
     const opts=FINANCE_CATEGORIES.map(c=>`<option value="${safe(c.value)}">${safe(c.label)}</option>`).join('');
@@ -102,7 +92,7 @@
     return `<details class="collapsible-list"><summary>Технические записи · ${rows.length}</summary><div class="finance-list">${body}</div></details>`;
   }
   function managementHTML(ctx){
-    return `<details class="card collapsible-list finance-v1-manage"><summary>Управление</summary><div class="finance-v1-manage-grid"><button class="ghost-button" type="button" data-finance-balance-open>Настроить баланс</button></div><details class="collapsible-list"><summary>Добавить поступление / оплату</summary>${renderFinancePlanForm('income')}${renderFinancePlanForm('obligation')}</details>${historyHTML()}${technicalHTML(ctx)}</details>`;
+    return `<details class="card collapsible-list finance-v1-manage"><summary>Управление</summary><details class="collapsible-list"><summary>Добавить поступление / оплату</summary>${renderFinancePlanForm('income')}${renderFinancePlanForm('obligation')}</details>${historyHTML()}${technicalHTML(ctx)}</details>`;
   }
   function renderFinanceV1(){
     const root=$('#tab-finance');
@@ -114,12 +104,12 @@
   }
   async function openBalanceDialog(){
     const ctx=getFinanceContext();
-    const result=await openEditDialog({title:'Настроить баланс',fields:[{name:'availableBalance',label:'На карте',value:ctx.availableBalance||'',placeholder:'Напр. 12500'},{name:'reserveBalance',label:'Резерв',value:ctx.reserveBalance||'',placeholder:'Не трогать каждый день'}],submitText:'Сохранить'});
+    const result=await openEditDialog({title:'Карта и резерв',fields:[{name:'availableBalance',label:'На карте',value:ctx.availableBalance||'',placeholder:'Напр. 12500'},{name:'reserveBalance',label:'Резерв',value:ctx.reserveBalance||'',placeholder:'Не трогать каждый день'}],submitText:'Сохранить'});
     if(!result)return;
     ctx.availableBalance=signedMoneyInput(result.availableBalance);
     ctx.reserveBalance=normalizeMoneyInput(result.reserveBalance);
     markChanged();
-    showToast('Баланс сохранён');
+    showToast('Карта и резерв сохранены');
   }
   function bindFinanceV1(root){
     $$('[data-finance-balance-open]',root).forEach(btn=>btn.onclick=openBalanceDialog);
@@ -158,7 +148,7 @@
       if(!await openConfirmDialog(type==='income'?'Откатить поступление?':'Откатить оплату?'))return;
       const amount=money(item.amount);addAvailableBalance(type==='income'?-amount:amount);
       item.status='planned';item.completedAt='';
-      markChanged();showToast('Операция откачена');
+      markChanged();showToast('Операция отменена');
     });
   }
   window.renderFinance=renderFinanceV1;

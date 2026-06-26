@@ -1,4 +1,4 @@
-// TSB Hub v0.9.1 - Finance v1 simplified.
+// TSB Hub v0.9.2 - Finance v1 simple top cards.
 // One finance module: simple money screen, real-data history, and handlers.
 (function(){
   const todayISO=()=>toISODate(new Date());
@@ -29,12 +29,12 @@
     const available=money(ctx.availableBalance);
     const reserve=money(ctx.reserveBalance);
     const required=requiredSoon(ctx);
-    const free=available-required;
-    let status='Нормально',tone='good',note='Показываются только понятные суммы: карта, резерв и ближайшие обязательные оплаты.';
+    const balanceAfterRequired=available-required;
+    let status='Нормально',tone='good',note='Показываются только основные деньги: карта, резерв и ближайшие обязательные оплаты.';
     if(!ctx.availableBalance){status='Нет баланса';tone='empty';note='Укажи деньги на карте через “Изменить карту и резерв”.'}
-    else if(free<0){status='Не хватает';tone='bad';note=`По ближайшим оплатам не хватает ${fmt(Math.abs(free))}.`}
-    else if(required>0){status='Есть обязательные оплаты';tone='warn';note=`После ближайших оплат останется примерно ${fmt(free)}.`}
-    return{ctx,available,reserve,required,free,status,tone,note};
+    else if(balanceAfterRequired<0){status='Не хватает';tone='bad';note=`Ближайшие оплаты больше денег на карте на ${fmt(Math.abs(balanceAfterRequired))}.`}
+    else if(required>0){status='Есть обязательные оплаты';tone='warn';note='Учти ближайшие обязательные оплаты перед обычными тратами.'}
+    return{ctx,available,reserve,required,status,tone,note};
   }
   function allExpenseRows(){
     const rows=[];
@@ -63,7 +63,7 @@
     return [...obl,...inc].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
   }
   function moneyStateHTML(s){
-    return `<section class="card finance-v1-hero finance-v1-${s.tone}"><div class="finance-v1-status"><span class="badge">${safe(s.status)}</span><span class="muted">Деньги сейчас</span></div><h2>Финансы</h2><p class="muted">${safe(s.note)}</p><div class="finance-v1-grid"><div class="stat-card main"><div class="muted">На карте</div><div class="stat-value">${s.ctx.availableBalance?fmt(s.available):'—'}</div></div><div class="stat-card"><div class="muted">Резерв</div><div class="stat-value small-stat">${s.ctx.reserveBalance?fmt(s.reserve):'—'}</div></div><div class="stat-card"><div class="muted">Свободно на жизнь</div><div class="stat-value small-stat">${s.ctx.availableBalance?fmt(s.free):'—'}</div></div><div class="stat-card"><div class="muted">Обязательное скоро</div><div class="stat-value small-stat">${fmt(s.required)}</div></div></div><button class="ghost-button" type="button" data-finance-balance-open>Изменить карту и резерв</button></section>`;
+    return `<section class="card finance-v1-hero finance-v1-${s.tone}"><div class="finance-v1-status"><span class="badge">${safe(s.status)}</span><span class="muted">Деньги сейчас</span></div><h2>Финансы</h2><p class="muted">${safe(s.note)}</p><div class="finance-v1-grid"><div class="stat-card main"><div class="muted">На карте</div><div class="stat-value">${s.ctx.availableBalance?fmt(s.available):'—'}</div></div><div class="stat-card"><div class="muted">Резерв</div><div class="stat-value small-stat">${s.ctx.reserveBalance?fmt(s.reserve):'—'}</div></div><div class="stat-card"><div class="muted">Обязательное скоро</div><div class="stat-value small-stat">${fmt(s.required)}</div></div></div><button class="ghost-button" type="button" data-finance-balance-open>Изменить карту и резерв</button></section>`;
   }
   function expenseFormHTML(){
     const opts=FINANCE_CATEGORIES.map(c=>`<option value="${safe(c.value)}">${safe(c.label)}</option>`).join('');

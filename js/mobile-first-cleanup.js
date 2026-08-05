@@ -1,4 +1,4 @@
-// TSB Hub 0.9.6 — mobile shell cleanup, usage log, weight prompt, and keyboard recovery.
+// TSB Hub 0.9.7 — mobile shell cleanup, visible usage log, weight prompt, and keyboard recovery.
 (function(){
   const PRIMARY_TABS=new Set(['today','plans','finance']);
   const TAB_LABELS={today:'Сегодня',plans:'Планы',finance:'Финансы',important:'Важное',sync:'Синхронизация',settings:'Настройки'};
@@ -25,8 +25,10 @@
   function safeApp(){return typeof app!=='undefined'&&app?app:null}
   function dateISO(d=new Date()){return typeof toISODate==='function'?toISODate(d):d.toISOString().slice(0,10)}
   function addLocalDays(iso,days){return typeof addDays==='function'?addDays(iso,days):dateISO(new Date(new Date(`${iso}T00:00:00`).getTime()+days*86400000))}
+  function short(iso){return typeof shortDate==='function'?shortDate(iso):String(iso||'').slice(5)}
   function timeHM(d=new Date()){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
   function minutesOfDay(d=new Date()){return d.getHours()*60+d.getMinutes()}
+  function esc(v){return typeof escapeHTML==='function'?escapeHTML(v||''):String(v||'')}
   function markSoftSave(){try{if(typeof saveData==='function')saveData(app,true)}catch(e){}}
   function wireMenuButton(button){button.onclick=()=>{if(typeof setTab==='function')setTab(button.dataset.tabTarget);if(typeof closeMobileTabMenu==='function')closeMobileTabMenu()}}
   function structureMenu(){
@@ -38,10 +40,7 @@
     groups.forEach(group=>{
       const wrap=document.createElement('div');wrap.className='mobile-menu-group';
       const title=document.createElement('div');title.className='mobile-menu-title';title.textContent=group.title;wrap.appendChild(title);
-      group.tabs.forEach(tab=>{
-        const btn=existing.get(tab)||document.createElement('button');
-        btn.type='button';btn.dataset.tabTarget=tab;btn.hidden=false;btn.textContent=label(tab);wireMenuButton(btn);wrap.appendChild(btn);
-      });
+      group.tabs.forEach(tab=>{const btn=existing.get(tab)||document.createElement('button');btn.type='button';btn.dataset.tabTarget=tab;btn.hidden=false;btn.textContent=label(tab);wireMenuButton(btn);wrap.appendChild(btn)});
       menu.appendChild(wrap);
     });
     menu.dataset.structured='true';
@@ -63,15 +62,9 @@
     const nightDate=min<240?addLocalDays(today,-1):today;
     const ensure=iso=>data.appUsage[iso]=data.appUsage[iso]||{firstMorningOpen:'',firstMorningAt:'',lastNightOpen:'',lastNightAt:'',lastOpen:'',openCount:0};
     const todayEntry=ensure(today);todayEntry.lastOpen=now.toISOString();todayEntry.openCount=Number(todayEntry.openCount||0)+1;
-    let changed=true;
-    if(min>=240&&min<=840){
-      if(!todayEntry.firstMorningOpen||hm<todayEntry.firstMorningOpen){todayEntry.firstMorningOpen=hm;todayEntry.firstMorningAt=now.toISOString()}
-    }
-    if(min>=1200||min<240){
-      const entry=ensure(nightDate);
-      if(!entry.lastNightOpen||hm>entry.lastNightOpen||min<240){entry.lastNightOpen=hm;entry.lastNightAt=now.toISOString()}
-    }
-    if(changed)markSoftSave();
+    if(min>=240&&min<=840){if(!todayEntry.firstMorningOpen||hm<todayEntry.firstMorningOpen){todayEntry.firstMorningOpen=hm;todayEntry.firstMorningAt=now.toISOString()}}
+    if(min>=1200||min<240){const entry=ensure(nightDate);if(!entry.lastNightOpen||hm>entry.lastNightOpen||min<240){entry.lastNightOpen=hm;entry.lastNightAt=now.toISOString()}}
+    markSoftSave();
   }
   function scheduleUsageRecord(delay=500){clearTimeout(usageTimer);usageTimer=setTimeout(recordUsageOpen,delay)}
   function usageForWeekText(){
@@ -81,41 +74,32 @@
     for(let i=0;i<7;i+=1){const iso=addLocalDays(base,i),u=data.appUsage[iso]||{};lines.push(`  - ${iso}: утро ${u.firstMorningOpen||'—'}, ночь ${u.lastNightOpen||'—'}${u.firstMorningOpen&&u.lastNightOpen?' · сон можно оценивать только примерно по входам в приложение':''}`)}
     return `\nАвто-учёт входов в приложение:\n${lines.join('\n')}\nВажно: это не точный трекер сна. Если приложение открывалось за 2–3 часа до сна или не открывалось утром сразу после пробуждения, оценка сна низкой точности.`;
   }
-  function wrapGptReport(){
-    if(reportWrapped||typeof buildGptReport!=='function')return;
-    const original=buildGptReport;
-    buildGptReport=function(){return `${original()}${usageForWeekText()}`};
-    reportWrapped=true;
+  function usageListHTML(){
+    const data=safeApp();const usage=data?.appUsage||{};const today=dateISO();const rows=[];
+    for(let i=0;i<7;i+=1){const iso=addLocalDays(today,-i),u=usage[iso]||{};rows.push(`<article class="finance-card usage-log-row"><div class="item-top"><div><div class="badge-row"><span class="badge important">${esc(short(iso))}</span><span class="badge">входов ${Number(u.openCount||0)}</span></div><h3>${esc(u.firstMorningOpen||'—')} → ${esc(u.lastNightOpen||'—')}</h3><p class="muted">утро / ночь${u.lastOpen?` · последний вход ${esc(new Date(u.lastOpen).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}))}`:''}</p></div></div></article>`)}
+    return rows.join('')
   }
+  function patchSettingsUsage(){
+    const root=qs('#tab-settings');if(!root)return;
+    const existing=qs('[data-mf-settings-usage]',root);
+    const html=`<div class="card-title-row"><h2>Автовходы / примерный сон</h2></div><p class="muted">Записывается автоматически: первый утренний вход и последний ночной вход. Это примерный ориентир, а не точный трекер сна.</p><div class="finance-list">${usageListHTML()}</div>`;
+    if(existing){existing.innerHTML=html;return}
+    const card=document.createElement('section');card.className='card settings-usage-card';card.dataset.mfSettingsUsage='true';card.innerHTML=html;root.appendChild(card)
+  }
+  function wrapGptReport(){if(reportWrapped||typeof buildGptReport!=='function')return;const original=buildGptReport;buildGptReport=function(){return `${original()}${usageForWeekText()}`};reportWrapped=true}
   function currentWeightISO(){return typeof getWeeklyWeightISO==='function'?getWeeklyWeightISO(dateISO()):dateISO()}
   function currentWeightValue(){try{return getHealth(currentWeightISO()).weight||''}catch(e){return ''}}
   function shouldShowWeightPrompt(){const now=new Date();if(now.getDay()!==1)return false;return !currentWeightValue()}
-  function weightFormHTML(prefix='today'){
-    return `<form class="form-grid weight weekly-weight-inline" data-mf-weight-form="${prefix}"><label>Актуальный вес, кг<input name="weight" inputmode="decimal" placeholder="Напр. 110" value="${typeof escapeHTML==='function'?escapeHTML(currentWeightValue()):currentWeightValue()}"></label><button class="primary-button" type="submit">Сохранить вес</button></form>`
-  }
-  function bindWeightForms(root=document){
-    qsa('[data-mf-weight-form]',root).forEach(form=>{if(form.dataset.bound==='true')return;form.dataset.bound='true';form.onsubmit=e=>{e.preventDefault();const data=safeApp();if(!data||typeof getHealth!=='function')return;const fd=new FormData(form);const iso=currentWeightISO();getHealth(iso).weight=typeof normalizeWeightInput==='function'?(normalizeWeightInput(fd.get('weight'))||null):(fd.get('weight')||null);if(typeof markChanged==='function')markChanged();else markSoftSave();if(typeof showToast==='function')showToast('Вес сохранён')}})
-  }
+  function weightFormHTML(prefix='today'){return `<form class="form-grid weight weekly-weight-inline" data-mf-weight-form="${prefix}"><label>Актуальный вес, кг<input name="weight" inputmode="decimal" placeholder="Напр. 110" value="${esc(currentWeightValue())}"></label><button class="primary-button" type="submit">Сохранить вес</button></form>`}
+  function bindWeightForms(root=document){qsa('[data-mf-weight-form]',root).forEach(form=>{if(form.dataset.bound==='true')return;form.dataset.bound='true';form.onsubmit=e=>{e.preventDefault();const data=safeApp();if(!data||typeof getHealth!=='function')return;const fd=new FormData(form);const iso=currentWeightISO();getHealth(iso).weight=typeof normalizeWeightInput==='function'?(normalizeWeightInput(fd.get('weight'))||null):(fd.get('weight')||null);if(typeof markChanged==='function')markChanged();else markSoftSave();if(typeof showToast==='function')showToast('Вес сохранён')}})}
   function patchTodayWeight(){
     const root=qs('#tab-today.active');if(!root||qs('[data-mf-weight-card]',root)||!shouldShowWeightPrompt())return;
-    const card=document.createElement('section');card.className='card today-input-card';card.dataset.mfWeightCard='true';
-    card.innerHTML=`<div class="card-title-row"><h2>Вес недели</h2></div><p class="muted">Появляется по понедельникам. После сохранения прячется до следующей недели.</p>${weightFormHTML('today')}`;
-    const anchor=root.querySelector('.today-summary-compact');
-    if(anchor&&anchor.nextSibling)root.insertBefore(card,anchor.nextSibling);else root.prepend(card);
-    bindWeightForms(card);
+    const card=document.createElement('section');card.className='card today-input-card';card.dataset.mfWeightCard='true';card.innerHTML=`<div class="card-title-row"><h2>Вес недели</h2></div><p class="muted">Появляется по понедельникам. После сохранения прячется до следующей недели.</p>${weightFormHTML('today')}`;
+    const anchor=root.querySelector('.today-summary-compact');if(anchor&&anchor.nextSibling)root.insertBefore(card,anchor.nextSibling);else root.prepend(card);bindWeightForms(card)
   }
-  function patchSettingsWeight(){
-    const root=qs('#tab-settings');if(!root||qs('[data-mf-settings-weight]',root))return;
-    const card=document.createElement('section');card.className='card settings-weight-card';card.dataset.mfSettingsWeight='true';
-    card.innerHTML=`<div class="card-title-row"><h2>Вес сейчас</h2></div><p class="muted">Текущий вес хранится по неделям. На главном экране ввод появляется по понедельникам.</p>${weightFormHTML('settings')}`;
-    root.appendChild(card);bindWeightForms(card);
-  }
-  function patchFoodRemoval(){
-    qsa('[data-tab="food"],[data-tab-target="food"]').forEach(el=>{el.hidden=true;el.style.display='none'});
-    const foodPage=qs('#tab-food');if(foodPage)foodPage.hidden=true;
-    if((document.body.dataset.activeTab||state?.activeTab)==='food'&&typeof setTab==='function')setTab('today');
-  }
-  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();bindWeightForms(document)}
+  function patchSettingsWeight(){const root=qs('#tab-settings');if(!root||qs('[data-mf-settings-weight]',root))return;const card=document.createElement('section');card.className='card settings-weight-card';card.dataset.mfSettingsWeight='true';card.innerHTML=`<div class="card-title-row"><h2>Вес сейчас</h2></div><p class="muted">Текущий вес хранится по неделям. На главном экране ввод появляется по понедельникам.</p>${weightFormHTML('settings')}`;root.appendChild(card);bindWeightForms(card)}
+  function patchFoodRemoval(){qsa('[data-tab="food"],[data-tab-target="food"]').forEach(el=>{el.hidden=true;el.style.display='none'});const foodPage=qs('#tab-food');if(foodPage)foodPage.hidden=true;if((document.body.dataset.activeTab||state?.activeTab)==='food'&&typeof setTab==='function')setTab('today')}
+  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();bindWeightForms(document)}
   function scheduleScreenPatch(delay=80){clearTimeout(renderPatchTimer);renderPatchTimer=setTimeout(patchScreens,delay)}
   function setupInputFocusGuard(){
     initViewportBaseline();
@@ -132,8 +116,7 @@
   }
   function setupMobileFirstCleanup(){
     qsa('.tabs .tab-button').forEach(button=>{const tab=button.dataset.tab;if(TAB_LABELS[tab])setButtonLabel(button,tab)});
-    const toggle=qs('#mobileTabToggle');
-    if(toggle){toggle.textContent='Ещё';toggle.title='Ещё разделы';toggle.setAttribute('aria-label','Ещё разделы приложения')}
+    const toggle=qs('#mobileTabToggle');if(toggle){toggle.textContent='Ещё';toggle.title='Ещё разделы';toggle.setAttribute('aria-label','Ещё разделы приложения')}
     structureMenu();updateMoreState();syncKeyboardNav();wrapGptReport();scheduleUsageRecord();scheduleScreenPatch();
   }
   document.addEventListener('DOMContentLoaded',()=>{setupMobileFirstCleanup();setupInputFocusGuard()});

@@ -1,4 +1,4 @@
-/* TSB Hub 0.8.25 - Today as input point */
+/* TSB Hub v0.10.1-full-republish — Today as input point. */
 .mobile-daily-dashboard{display:grid;gap:7px;padding:9px;border:1px solid rgba(139,92,246,.22);background:rgba(23,32,51,.72)}
 .dashboard-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.dashboard-action{min-height:42px;border:1px solid rgba(148,163,184,.22);border-radius:13px;background:rgba(255,255,255,.055);color:var(--text);display:flex;align-items:center;justify-content:center;padding:5px 4px;font-size:.76rem;font-weight:900;line-height:1.05;text-align:center}.dashboard-action.primary{background:rgba(139,92,246,.72);border-color:rgba(255,255,255,.18)}.dashboard-status-line{font-size:.74rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dashboard-target-highlight{border-color:rgba(139,92,246,.95)!important;box-shadow:0 0 0 3px rgba(139,92,246,.16)!important}
 @media(min-width:901px){.mobile-daily-dashboard{display:none!important}}

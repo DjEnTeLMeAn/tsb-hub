@@ -1,4 +1,4 @@
-// TSB Hub 0.8.24 — lightweight phone-first quick actions.
+// TSB Hub v0.10.1-full-republish — lightweight phone-first quick actions.
 (function(){
   const targetMap={task:'Задачи дня',food:'Питание дня',finance:'Финансы дня',report:'Итог дня'};
   let scheduled=false;

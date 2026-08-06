@@ -11,6 +11,7 @@ const APP_SHELL=[
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,
   `./js/finance-module-v1.js?v=${RELEASE}`,
+  `./js/release-manager.js?v=${RELEASE}`,
   `./manifest.json?v=${RELEASE}`,
   `./icons/icon-192.png?v=${RELEASE}`,
   `./icons/icon-512.png?v=${RELEASE}`

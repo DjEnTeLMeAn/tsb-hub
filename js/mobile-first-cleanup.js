@@ -1,4 +1,4 @@
-// TSB Hub 0.9.7 — mobile shell cleanup, visible usage log, weight prompt, and keyboard recovery.
+// TSB Hub 0.9.8 — minimal Today cleanup, visible usage log, weight prompt, and keyboard recovery.
 (function(){
   const PRIMARY_TABS=new Set(['today','plans','finance']);
   const TAB_LABELS={today:'Сегодня',plans:'Планы',finance:'Финансы',important:'Важное',sync:'Синхронизация',settings:'Настройки'};
@@ -99,7 +99,47 @@
   }
   function patchSettingsWeight(){const root=qs('#tab-settings');if(!root||qs('[data-mf-settings-weight]',root))return;const card=document.createElement('section');card.className='card settings-weight-card';card.dataset.mfSettingsWeight='true';card.innerHTML=`<div class="card-title-row"><h2>Вес сейчас</h2></div><p class="muted">Текущий вес хранится по неделям. На главном экране ввод появляется по понедельникам.</p>${weightFormHTML('settings')}`;root.appendChild(card);bindWeightForms(card)}
   function patchFoodRemoval(){qsa('[data-tab="food"],[data-tab-target="food"]').forEach(el=>{el.hidden=true;el.style.display='none'});const foodPage=qs('#tab-food');if(foodPage)foodPage.hidden=true;if((document.body.dataset.activeTab||state?.activeTab)==='food'&&typeof setTab==='function')setTab('today')}
-  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();bindWeightForms(document)}
+  function patchTodayHeaderButtons(){
+    const root=qs('#tab-today');if(!root)return;
+    qsa('.card-title-row [data-tab-target="plans"],.card-title-row [data-tab-target="finance"],.card-title-row [data-tab-target="food"]',root).forEach(btn=>btn.remove());
+    const financeLine=qs('.today-finance-card .finance-summary-line',root);
+    if(financeLine&&!financeLine.dataset.mfNoAssets){financeLine.textContent=financeLine.textContent.replace(/\s*·\s*активы:[^·]*/i,'');financeLine.dataset.mfNoAssets='true'}
+  }
+  function cleanCollapseText(text){
+    let clean=String(text||'').trim().replace(/\s+/g,' ');
+    if(!clean.startsWith('Показать '))return '';
+    clean=clean.replace(/^Показать\s+/,'');
+    clean=clean.replace(/^задачи дня/i,'Задачи дня').replace(/^питание дня/i,'Питание дня').replace(/^операции дня/i,'Финансы дня').replace(/^ближайшие даты/i,'Ближайшие даты').replace(/^незавершённые задачи/i,'Незавершённые задачи');
+    clean=clean.replace(/\s+(\d+(?:\s*·\s*\d+\s*дн\.)?)$/,' • $1');
+    return clean;
+  }
+  function patchCollapsibleSummaries(root=document){
+    qsa('details>summary',root).forEach(summary=>{
+      const clean=cleanCollapseText(summary.textContent);
+      if(!clean)return;
+      const wasOpen=summary.parentElement?.open;
+      summary.innerHTML=`<span class="mf-summary-title">${esc(clean)}</span><span class="mf-summary-arrow" aria-hidden="true">⌄</span>`;
+      summary.dataset.mfCleanSummary='true';
+      if(summary.parentElement)summary.parentElement.open=Boolean(wasOpen);
+    });
+  }
+  function patchDailyReportCompact(){
+    const root=qs('#tab-today');if(!root)return;
+    const chips=qsa('.daily-report-status .summary-chip',root);
+    if(chips.length>=3){
+      chips[0].textContent=chips[0].textContent.replace('Самоощущение','Сам.');
+      chips[1].textContent=chips[1].textContent.replace('Желание','Жел.');
+      chips[2].textContent=/есть/i.test(chips[2].textContent)?'Коммент +':'Коммент -';
+    }
+  }
+  function patchActionButtonText(root=document){
+    qsa('.actions button,.item-top button,.task-top button',root).forEach(btn=>{
+      const text=btn.textContent.trim();
+      if(text==='Изм.'||text==='Изменить'){btn.title='Изменить';btn.textContent='✎';btn.classList.add('mf-icon-action')}
+      if(text==='Удал.'||text==='Удалить'){btn.title='Удалить';btn.textContent='×';btn.classList.add('mf-icon-action')}
+    });
+  }
+  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();patchTodayHeaderButtons();patchCollapsibleSummaries(document);patchDailyReportCompact();patchActionButtonText(document);bindWeightForms(document)}
   function scheduleScreenPatch(delay=80){clearTimeout(renderPatchTimer);renderPatchTimer=setTimeout(patchScreens,delay)}
   function setupInputFocusGuard(){
     initViewportBaseline();

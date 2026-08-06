@@ -1,4 +1,4 @@
-const RELEASE='0.10.2-full-refresh-20260807';
+const RELEASE='0.10.3-task-ui-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

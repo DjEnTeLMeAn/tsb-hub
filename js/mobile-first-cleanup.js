@@ -1,4 +1,4 @@
-// TSB Hub 0.9.8 — minimal Today cleanup, visible usage log, weight prompt, and keyboard recovery.
+// TSB Hub 0.9.9 — stable minimal Today: one details arrow, no scroll jump.
 (function(){
   const PRIMARY_TABS=new Set(['today','plans','finance']);
   const TAB_LABELS={today:'Сегодня',plans:'Планы',finance:'Финансы',important:'Важное',sync:'Синхронизация',settings:'Настройки'};
@@ -9,6 +9,7 @@
   let usageTimer=0;
   let renderPatchTimer=0;
   let reportWrapped=false;
+  let stableRenderWrapped=false;
   function qs(selector,root=document){return root.querySelector(selector)}
   function qsa(selector,root=document){return Array.from(root.querySelectorAll(selector))}
   function label(tab){return TAB_LABELS[tab]||tab||'Ещё'}
@@ -29,6 +30,26 @@
   function timeHM(d=new Date()){return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`}
   function minutesOfDay(d=new Date()){return d.getHours()*60+d.getMinutes()}
   function esc(v){return typeof escapeHTML==='function'?escapeHTML(v||''):String(v||'')}
+  function currentScrollY(){return window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0}
+  function restoreScroll(y,tab){
+    const shouldRestore=()=>!document.hidden&&(!window.state||state.activeTab===tab);
+    const doRestore=()=>{if(shouldRestore())window.scrollTo(0,y)};
+    requestAnimationFrame(doRestore);
+    setTimeout(doRestore,40);
+    setTimeout(doRestore,120);
+  }
+  function wrapStableRerenders(){
+    if(stableRenderWrapped||typeof markChanged!=='function')return;
+    const original=markChanged;
+    markChanged=function(){
+      const y=currentScrollY();
+      const tab=window.state?.activeTab||document.body.dataset.activeTab||'';
+      const result=original.apply(this,arguments);
+      restoreScroll(y,tab);
+      return result;
+    };
+    stableRenderWrapped=true;
+  }
   function markSoftSave(){try{if(typeof saveData==='function')saveData(app,true)}catch(e){}}
   function wireMenuButton(button){button.onclick=()=>{if(typeof setTab==='function')setTab(button.dataset.tabTarget);if(typeof closeMobileTabMenu==='function')closeMobileTabMenu()}}
   function structureMenu(){
@@ -105,17 +126,21 @@
     const financeLine=qs('.today-finance-card .finance-summary-line',root);
     if(financeLine&&!financeLine.dataset.mfNoAssets){financeLine.textContent=financeLine.textContent.replace(/\s*·\s*активы:[^·]*/i,'');financeLine.dataset.mfNoAssets='true'}
   }
-  function cleanCollapseText(text){
-    let clean=String(text||'').trim().replace(/\s+/g,' ');
-    if(!clean.startsWith('Показать '))return '';
-    clean=clean.replace(/^Показать\s+/,'');
+  function normalizeCollapseTitle(raw){
+    let clean=String(raw||'').trim().replace(/\s+/g,' ');
+    clean=clean.replace(/\s*[⌄▾▴▲▼]\s*$/,'').replace(/^Показать\s+/i,'');
+    if(!clean)return '';
     clean=clean.replace(/^задачи дня/i,'Задачи дня').replace(/^питание дня/i,'Питание дня').replace(/^операции дня/i,'Финансы дня').replace(/^ближайшие даты/i,'Ближайшие даты').replace(/^незавершённые задачи/i,'Незавершённые задачи');
-    clean=clean.replace(/\s+(\d+(?:\s*·\s*\d+\s*дн\.)?)$/,' • $1');
+    clean=clean.replace(/\s*•\s*/g,' • ').replace(/(?:\s*•\s*){2,}/g,' • ').trim();
+    const m=clean.match(/^(.+?)\s*(?:•\s*)?(\d+(?:\s*·\s*\d+\s*дн\.)?)$/i);
+    if(m)return `${m[1].replace(/\s*•\s*$/,'').trim()} • ${m[2].trim()}`;
     return clean;
   }
   function patchCollapsibleSummaries(root=document){
-    qsa('details>summary',root).forEach(summary=>{
-      const clean=cleanCollapseText(summary.textContent);
+    qsa('details.collapsible-list>summary, .collapsible-list>summary',root).forEach(summary=>{
+      const raw=summary.dataset.mfRawTitle||summary.textContent;
+      if(!summary.dataset.mfRawTitle&&/^Показать\s+/i.test(raw))summary.dataset.mfRawTitle=raw;
+      const clean=normalizeCollapseTitle(summary.dataset.mfRawTitle||raw);
       if(!clean)return;
       const wasOpen=summary.parentElement?.open;
       summary.innerHTML=`<span class="mf-summary-title">${esc(clean)}</span><span class="mf-summary-arrow" aria-hidden="true">⌄</span>`;
@@ -155,6 +180,7 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){baselineViewportHeight=0;showNavAfterKeyboard();scheduleSync(120);scheduleUsageRecord(300);scheduleScreenPatch(120)}});
   }
   function setupMobileFirstCleanup(){
+    wrapStableRerenders();
     qsa('.tabs .tab-button').forEach(button=>{const tab=button.dataset.tab;if(TAB_LABELS[tab])setButtonLabel(button,tab)});
     const toggle=qs('#mobileTabToggle');if(toggle){toggle.textContent='Ещё';toggle.title='Ещё разделы';toggle.setAttribute('aria-label','Ещё разделы приложения')}
     structureMenu();updateMoreState();syncKeyboardNav();wrapGptReport();scheduleUsageRecord();scheduleScreenPatch();

@@ -1,0 +1,37 @@
+name: Finance v2 Stage C
+on:
+  push:
+    branches: [finance-v2-part1-work]
+    paths:
+      - 'scripts/finance-v2-stage-c.mjs'
+      - '.github/workflows/finance-v2-stage-c.yml'
+permissions:
+  contents: write
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-v2-part1-work
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply stage C
+        run: node scripts/finance-v2-stage-c.mjs
+      - name: Test
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Build check
+        run: npm run build
+      - name: Commit stage C result
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/finance-core.js tests/finance-core.test.cjs
+          if ! git diff --cached --quiet; then
+            git commit -m 'Finance v2 part1 C: operations API and derived balances'
+            git push origin HEAD:finance-v2-part1-work
+          fi

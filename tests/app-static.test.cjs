@@ -29,3 +29,12 @@ assert.ok(reportFn.includes('getFinanceTotalBalance()'),'GPT report must use Fin
 assert.ok(reportFn.includes('accountLines'),'GPT report must include account breakdown');
 assert.equal(reportFn.includes('context.availableBalance'),false,'GPT report must not use legacy availableBalance');
 assert.ok(reportFn.includes('Legacy-резерв'),'legacy reserve must be explicitly labeled');
+
+
+// Finance v2 Part 2 reserve UI must use the central core API.
+assert.ok(app.includes('function renderFinanceReservesScreen'),'reserve management screen missing');
+assert.ok(app.includes('data-finance-reserves-open'),'reserve management entry missing');
+assert.ok(app.includes('TSBFinanceCore.createReserve'),'reserve create must use finance core');
+assert.ok(app.includes('TSBFinanceCore.adjustReserveAmount'),'reserve adjustment must use finance core');
+assert.ok(app.includes('TSBFinanceCore.importLegacyReserve'),'legacy reserve import must use finance core');
+assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 must not introduce an override module');

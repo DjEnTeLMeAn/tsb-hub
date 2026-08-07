@@ -36,3 +36,19 @@
 .finance-v2-history-groups{display:grid;gap:12px;margin-top:12px}
 .finance-v2-history-day>h3{font-size:.9rem;color:var(--muted);margin:0 0 7px 5px;text-transform:none;font-weight:750}
 @media(max-width:600px){.finance-v2-history-search{grid-template-columns:1fr 1fr}.finance-v2-history-search button{grid-column:1/-1}.finance-v2-custom-period{grid-template-columns:1fr 1fr}}
+
+
+/* Finance v2 Part 2 — reserves */
+.finance-v2-reserves-card,.finance-v2-subscreen-head,.finance-v2-legacy-review{overflow:hidden}
+.finance-v2-reserve-list{display:grid;gap:9px;margin-top:10px}
+.finance-v2-reserve-list.full{gap:12px}
+.finance-v2-reserve-card{display:grid;gap:10px;padding:13px;border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025)}
+.finance-v2-reserve-card h3{margin:0 0 4px}
+.finance-v2-reserve-amount{font-weight:850;font-size:1rem}
+.finance-v2-reserve-progress{height:7px;border-radius:999px;overflow:hidden;background:rgba(148,163,184,.15);margin-top:9px}
+.finance-v2-reserve-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgba(139,92,246,.75),rgba(167,139,250,.95))}
+.finance-v2-reserve-actions,.finance-v2-section-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.finance-v2-section-actions{margin-top:12px}
+.finance-v2-legacy-review{display:grid;gap:10px;border-color:rgba(245,158,11,.34)}
+.finance-v2-legacy-review h3{margin:0 0 4px}
+@media(min-width:650px){.finance-v2-reserve-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}

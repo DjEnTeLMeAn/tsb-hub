@@ -54,7 +54,8 @@ let state = {
   selectedDate: toISODate(new Date()),
   calendarMonth: startOfMonth(new Date()),
   activeTab: getInitialActiveTab(),
-  expandedSections: {}
+  expandedSections: {},
+  financeSubscreen: ''
 };
 let toastTimer = null;
 
@@ -713,9 +714,19 @@ function financeAccountOptions(selected = '') {
 function financeOptionHTML(options, selected = '') {
   return options.map(item => `<option value="${escapeHTML(item.value)}" ${String(item.value) === String(selected) ? 'selected' : ''}>${escapeHTML(item.label)}</option>`).join('');
 }
+function financeMutationErrorText(error) {
+  return ({
+    SYSTEM_LOCKED: 'Системную операцию нельзя изменить',
+    INSUFFICIENT_FREE_MONEY: 'Недостаточно свободных денег',
+    INVALID_RESERVE_AMOUNT: 'Сумма резерва не может быть отрицательной',
+    INVALID_TARGET_AMOUNT: 'Цель должна быть больше нуля',
+    NAME_REQUIRED: 'Укажи название',
+    NO_LEGACY_RESERVE_TO_IMPORT: 'Старый резерв уже обработан или отсутствует'
+  })[error] || 'Не удалось изменить финансы';
+}
 function applyFinanceMutation(result, message = '') {
   if (!result?.ok) {
-    if (typeof showToast === 'function') showToast(result?.error === 'SYSTEM_LOCKED' ? 'Системную операцию нельзя изменить' : 'Не удалось изменить финансы');
+    if (typeof showToast === 'function') showToast(financeMutationErrorText(result?.error));
     return false;
   }
   setFinanceStateV2(result.finance);
@@ -1473,6 +1484,77 @@ async function openFinanceV2TransferDialog() {
   if (!mutation.ok && mutation.error==='TRANSFER_FIELDS') { showToast('Выбери разные счета'); return; }
   applyFinanceMutation(mutation,'Перевод добавлен');
 }
+function getFinanceActiveReserves() {
+  return TSBFinanceCore.getActiveReserves(getFinanceStateV2());
+}
+function getFinanceReservedTotal() {
+  return TSBFinanceCore.getTotalReservedAmount(getFinanceStateV2());
+}
+function renderFinanceReserveProgress(reserve) {
+  if (!reserve.targetAmount) return '';
+  const pct = Math.max(0, Math.min(100, Math.round((Number(reserve.amount || 0) / Number(reserve.targetAmount || 1)) * 100)));
+  return `<div class="finance-v2-reserve-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><span style="width:${pct}%"></span></div>`;
+}
+function renderFinanceReserveCard(reserve, { compact = false } = {}) {
+  const amountLine = reserve.targetAmount ? `${formatRub(reserve.amount)} / ${formatRub(reserve.targetAmount)}` : formatRub(reserve.amount);
+  return `<article class="finance-v2-reserve-card">
+    <div class="finance-v2-reserve-main"><div class="item-top"><div><h3>${escapeHTML(reserve.name)}</h3><div class="finance-v2-reserve-amount">${amountLine}</div></div>${compact ? '' : '<span class="badge secondary">резерв</span>'}</div>${renderFinanceReserveProgress(reserve)}</div>
+    ${compact ? '' : `<div class="finance-v2-reserve-actions"><button class="ghost-button small" type="button" data-finance-reserve-adjust="${escapeHTML(reserve.id)}" data-direction="add">+ Пополнить</button><button class="ghost-button small" type="button" data-finance-reserve-adjust="${escapeHTML(reserve.id)}" data-direction="remove">− Снять</button><button class="ghost-button small" type="button" data-finance-reserve-edit="${escapeHTML(reserve.id)}">Изм.</button><button class="danger-button small" type="button" data-finance-reserve-archive="${escapeHTML(reserve.id)}">Архив</button></div>`}
+  </article>`;
+}
+function renderFinanceReservesCompact() {
+  const reserves = getFinanceActiveReserves();
+  const preview = reserves.slice(0, 3);
+  return `<section class="card finance-v2-reserves-card">
+    <div class="card-title-row"><div><h2>Резервы</h2><p class="muted">Назначение части уже существующих денег.</p></div><span class="badge">${formatRub(getFinanceReservedTotal())}</span></div>
+    <div class="finance-v2-reserve-list">${preview.length ? preview.map(item => renderFinanceReserveCard(item,{compact:true})).join('') : '<div class="empty">Резервов пока нет.</div>'}</div>
+    <div class="finance-v2-section-actions"><button class="ghost-button" type="button" data-finance-reserves-open>${reserves.length ? 'Все резервы' : 'Управление резервами'}</button><button class="primary-button" type="button" data-finance-reserve-create>+ Создать</button></div>
+  </section>`;
+}
+async function openFinanceReserveDialog(reserveId = '') {
+  const finance = getFinanceStateV2();
+  const current = finance.reserves.find(item => item.id === reserveId) || null;
+  const fields = [
+    { name:'name', label:'Название', value:current?.name || '', placeholder:'Машина, Подушка, Техника' },
+    ...(current ? [] : [{ name:'amount', label:'Начальная сумма', value:'', placeholder:'0' }]),
+    { name:'targetAmount', label:'Цель — необязательно', value:current?.targetAmount || '', placeholder:'Напр. 110000' }
+  ];
+  const result = await openEditDialog({ title:current ? 'Изменить резерв' : 'Создать резерв', fields, submitText:'Подтвердить' });
+  if (!result) return;
+  const draft = { name:String(result.name || '').trim(), targetAmount:normalizeMoneyInput(result.targetAmount) || null };
+  if (!current) draft.amount = normalizeMoneyInput(result.amount) || 0;
+  const mutation = current ? TSBFinanceCore.updateReserve(finance,current.id,draft,{fromDate:toISODate(new Date())}) : TSBFinanceCore.createReserve(finance,draft,{idFactory:uid,fromDate:toISODate(new Date())});
+  applyFinanceMutation(mutation,current ? 'Резерв изменён' : 'Резерв создан');
+}
+async function adjustFinanceReserve(reserveId,direction) {
+  const reserve=getFinanceStateV2().reserves.find(item=>item.id===reserveId); if(!reserve)return;
+  const adding=direction!=='remove';
+  const result=await openEditDialog({title:adding?`Пополнить · ${reserve.name}`:`Снять · ${reserve.name}`,fields:[{name:'amount',label:'Сумма',value:'',placeholder:'Напр. 5000'}],submitText:'Подтвердить'});
+  if(!result)return; const amount=moneyNumber(normalizeMoneyInput(result.amount)); if(amount<=0){showToast('Укажи сумму больше нуля');return;}
+  applyFinanceMutation(TSBFinanceCore.adjustReserveAmount(getFinanceStateV2(),reserveId,adding?amount:-amount,{fromDate:toISODate(new Date())}),adding?'Резерв пополнен':'Сумма снята из резерва');
+}
+async function archiveFinanceReserve(reserveId) {
+  const reserve=getFinanceStateV2().reserves.find(item=>item.id===reserveId);if(!reserve)return;
+  const ok=await openConfirmDialog({title:'Архивировать резерв?',message:`${reserve.name}. Деньги со счетов не изменятся — исчезнет только это назначение.`,confirmText:'Архивировать',danger:true});
+  if(!ok)return;applyFinanceMutation(TSBFinanceCore.archiveReserve(getFinanceStateV2(),reserveId),'Резерв архивирован');
+}
+async function importLegacyFinanceReserve() {
+  const finance=getFinanceStateV2(); const amount=finance.migration?.legacyReserveAmount || 0;
+  if(finance.migration?.legacyReserveStatus!=='REVIEW_REQUIRED'||!amount)return;
+  const ok=await openConfirmDialog({title:'Импортировать старый резерв?',message:`В старых данных найдено ${formatRub(amount)}. Поле исторически могло обозначать не только физический счёт, поэтому оно не переносилось автоматически. Импорт создаст резерв «Старый резерв» и не изменит деньги на счетах.`,confirmText:'Импортировать'});
+  if(!ok)return;applyFinanceMutation(TSBFinanceCore.importLegacyReserve(finance,{idFactory:uid}),'Старый резерв импортирован');
+}
+function renderFinanceReservesScreen(root = $('#tab-finance')) {
+  if(!root)return; const finance=getFinanceStateV2(); const active=TSBFinanceCore.getActiveReserves(finance); const legacyReview=finance.migration?.legacyReserveStatus==='REVIEW_REQUIRED'&&Number(finance.migration?.legacyReserveAmount)>0;
+  root.innerHTML=`
+    <section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Резервы</h2><p class="muted">Резерв — назначение части денег. Это не расход и не перевод между счетами.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
+    ${legacyReview?`<section class="card finance-v2-legacy-review"><div><h3>Найден старый резерв · ${formatRub(finance.migration.legacyReserveAmount)}</h3><p class="muted">Он не был перенесён автоматически: происхождение старого поля неоднозначно.</p></div><button class="ghost-button" type="button" data-finance-legacy-reserve-import>Импортировать как «Старый резерв»</button></section>`:''}
+    <section class="card"><div class="card-title-row"><div><h2>Активные резервы</h2><p class="muted">Всего назначено: ${formatRub(TSBFinanceCore.getTotalReservedAmount(finance))}</p></div><button class="primary-button small" type="button" data-finance-reserve-create>+ Создать</button></div>
+      <div class="finance-v2-reserve-list full">${active.length?active.map(item=>renderFinanceReserveCard(item)).join(''):'<div class="empty">Резервов пока нет.</div>'}</div>
+    </section>`;
+  bindFinanceV2Screen(root);
+}
+
 function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-v2-account-add]')?.addEventListener('click', () => openFinanceV2AccountDialog());
   root.querySelectorAll('[data-finance-v2-account-edit]').forEach(button => button.onclick = () => openFinanceV2AccountDialog(button.dataset.financeV2AccountEdit));
@@ -1481,6 +1563,13 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-v2-transfer-add]')?.addEventListener('click', openFinanceV2TransferDialog);
   root.querySelectorAll('[data-finance-v2-open]').forEach(row => row.onclick = event => { if (event.target.closest('button')) return; openFinanceV2TransactionEditor(row.dataset.financeV2Open); });
   root.querySelector('[data-finance-v2-history-open]')?.addEventListener('click', () => { state.financeHistoryOpen = true; renderFinance(); });
+  root.querySelector('[data-finance-reserves-open]')?.addEventListener('click',()=>{state.financeSubscreen='reserves';renderFinance();});
+  root.querySelector('[data-finance-subscreen-back]')?.addEventListener('click',()=>{state.financeSubscreen='';renderFinance();});
+  root.querySelectorAll('[data-finance-reserve-create]').forEach(button=>button.onclick=()=>openFinanceReserveDialog());
+  root.querySelectorAll('[data-finance-reserve-edit]').forEach(button=>button.onclick=()=>openFinanceReserveDialog(button.dataset.financeReserveEdit));
+  root.querySelectorAll('[data-finance-reserve-adjust]').forEach(button=>button.onclick=()=>adjustFinanceReserve(button.dataset.financeReserveAdjust,button.dataset.direction));
+  root.querySelectorAll('[data-finance-reserve-archive]').forEach(button=>button.onclick=()=>archiveFinanceReserve(button.dataset.financeReserveArchive));
+  root.querySelector('[data-finance-legacy-reserve-import]')?.addEventListener('click',importLegacyFinanceReserve);
 }
 
 function ensureFinanceHistoryState() {
@@ -1559,6 +1648,7 @@ function renderFinance() {
   const root = $('#tab-finance');
   if (!root) return;
   if (state.financeHistoryOpen && typeof renderFinanceHistoryV2 === 'function') { renderFinanceHistoryV2(root); return; }
+  if (state.financeSubscreen === 'reserves') { renderFinanceReservesScreen(root); return; }
   const finance = getFinanceStateV2();
   const accounts = getFinanceAccounts();
   const recent = getFinanceTransactions().slice(0, 8);
@@ -1573,6 +1663,8 @@ function renderFinance() {
       <div class="card-title-row"><div><h2>Счета</h2><p class="muted">Обычные траты идут со счёта по умолчанию.</p></div><button class="ghost-button small" type="button" data-finance-v2-account-add>+ Счёт</button></div>
       <div class="finance-v2-accounts">${accounts.map(renderFinanceV2AccountCard).join('') || '<div class="empty">Счетов пока нет.</div>'}</div>
     </section>
+
+    ${renderFinanceReservesCompact()}
 
     <section class="card finance-v2-recent-card">
       <div class="card-title-row"><div><h2>Последние операции</h2><p class="muted">Последние расходы, поступления и переводы.</p></div></div>

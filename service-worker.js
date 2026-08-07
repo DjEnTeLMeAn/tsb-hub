@@ -1,4 +1,4 @@
-const RELEASE='0.10.6-actions-weekplans-20260807';
+const RELEASE='0.10.7-confirm-actions-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,
@@ -7,6 +7,7 @@ const APP_SHELL=[
   `./css/mobile-first-cleanup.css?v=${RELEASE}`,
   `./css/mobile-dashboard.css?v=${RELEASE}`,
   `./css/mobile-finance.css?v=${RELEASE}`,
+  `./css/confirm-dialog.css?v=${RELEASE}`,
   `./js/update-manager.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,

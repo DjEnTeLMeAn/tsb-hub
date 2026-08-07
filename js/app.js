@@ -1377,72 +1377,132 @@ function renderGptPlanEditor() {
 }
 
 
+function financeTypeLabel(transaction) {
+  if (transaction.type === 'EXPENSE') return getFinanceCategoryLabel(transaction.categoryId);
+  if (transaction.type === 'INCOME') return getFinanceIncomeTypeById(transaction.incomeTypeId)?.name || 'Поступление';
+  if (transaction.type === 'TRANSFER') return 'Перевод';
+  return 'Корректировка';
+}
+function financeSignedAmount(transaction) {
+  const amount = moneyNumber(transaction.amount);
+  if (transaction.type === 'EXPENSE') return `−${formatRub(amount)}`;
+  if (transaction.type === 'INCOME') return `+${formatRub(amount)}`;
+  if (transaction.type === 'TRANSFER') return formatRub(amount);
+  return `${amount > 0 ? '+' : ''}${formatRub(amount)}`;
+}
+function financeTransactionTone(transaction) {
+  return transaction.type === 'EXPENSE' ? 'expense' : transaction.type === 'INCOME' ? 'income' : transaction.type === 'TRANSFER' ? 'transfer' : 'adjustment';
+}
+function renderFinanceV2AccountCard(account) {
+  const balance = getFinanceAccountBalance(account.id);
+  return `<article class="finance-v2-account ${account.isDefault ? 'default' : ''}">
+    <div><div class="badge-row">${account.isDefault ? '<span class="badge important">по умолчанию</span>' : ''}${account.type ? `<span class="badge secondary">${escapeHTML(account.type)}</span>` : ''}</div><h3>${escapeHTML(account.name)}</h3><div class="finance-v2-account-balance">${formatRub(balance)}</div></div>
+    <div class="actions"><button class="ghost-button" type="button" data-finance-v2-account-edit="${escapeHTML(account.id)}">Изм.</button>${getFinanceAccounts().length > 1 ? `<button class="danger-button" type="button" data-finance-v2-account-archive="${escapeHTML(account.id)}">Удал.</button>` : ''}</div>
+  </article>`;
+}
+function renderFinanceV2TransactionRow(transaction, options = {}) {
+  const compact = options.compact !== false;
+  const account = getFinanceStateV2().accounts.find(item => item.id === transaction.accountId);
+  const from = getFinanceStateV2().accounts.find(item => item.id === transaction.fromAccountId);
+  const to = getFinanceStateV2().accounts.find(item => item.id === transaction.toAccountId);
+  const accountText = transaction.type === 'TRANSFER' ? `${from?.name || '—'} → ${to?.name || '—'}` : (account?.name || '');
+  return `<article class="finance-card finance-v2-operation ${financeTransactionTone(transaction)}" data-finance-v2-open="${escapeHTML(transaction.id)}">
+    <div class="item-top"><div><div class="badge-row"><span class="badge ${transaction.type === 'EXPENSE' ? 'important' : 'secondary'}">${escapeHTML(financeTypeLabel(transaction))}</span>${transaction.time ? `<span class="badge">${escapeHTML(transaction.time)}</span>` : ''}</div><h3>${financeSignedAmount(transaction)}</h3>${transaction.description ? `<p class="muted">${escapeHTML(transaction.description)}</p>` : ''}${accountText ? `<p class="muted finance-v2-account-note">${escapeHTML(accountText)}</p>` : ''}</div>
+    ${compact ? '<span class="finance-v2-chevron">›</span>' : `<div class="actions"><button class="ghost-button" type="button" data-finance-v2-edit="${escapeHTML(transaction.id)}">Изм.</button><button class="danger-button" type="button" data-finance-v2-delete="${escapeHTML(transaction.id)}">Удал.</button></div>`}</div>
+  </article>`;
+}
+async function openFinanceV2AccountDialog(accountId = '') {
+  const finance = getFinanceStateV2();
+  const current = finance.accounts.find(item => item.id === accountId) || null;
+  const result = await openEditDialog({
+    title: current ? 'Изменить счёт' : 'Новый счёт',
+    fields: [
+      { name: 'name', label: 'Название', value: current?.name || '', placeholder: 'Т-Банк, Сбер, Наличные' },
+      { name: 'type', label: 'Тип', type: 'select', value: current?.type || '', options: [
+        { value: '', label: 'Не указывать' }, { value: 'Банк', label: 'Банк' }, { value: 'Наличные', label: 'Наличные' }, { value: 'Накопительный', label: 'Накопительный' }, { value: 'Другое', label: 'Другое' }
+      ]},
+      { name: 'isDefault', label: 'Использовать по умолчанию', type: 'select', value: current?.isDefault ? 'yes' : 'no', options: [{ value: 'no', label: 'Нет' }, { value: 'yes', label: 'Да' }] }
+    ], submitText: 'Подтвердить'
+  });
+  if (!result || !String(result.name || '').trim()) return;
+  const draft = { name: String(result.name).trim(), type: String(result.type || ''), isDefault: result.isDefault === 'yes' };
+  const mutation = current ? TSBFinanceCore.updateAccount(finance, current.id, draft) : TSBFinanceCore.createAccount(finance, draft, { idFactory: uid });
+  applyFinanceMutation(mutation, current ? 'Счёт изменён' : 'Счёт добавлен');
+}
+async function archiveFinanceV2Account(accountId) {
+  const account = getFinanceStateV2().accounts.find(item => item.id === accountId); if (!account) return;
+  const ok = await openConfirmDialog({ title: 'Архивировать счёт?', message: `${account.name}. Операции сохранятся в истории.`, confirmText: 'Подтвердить', danger: true });
+  if (!ok) return;
+  applyFinanceMutation(TSBFinanceCore.archiveAccount(getFinanceStateV2(), accountId), 'Счёт архивирован');
+}
+async function openFinanceV2IncomeDialog() {
+  const account = getDefaultFinanceAccount(); if (!account) return;
+  const now = new Date(); const today = toISODate(now); const hm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const result = await openEditDialog({ title: 'Добавить поступление', fields: [
+    { name: 'amount', label: 'Сумма', value: '', placeholder: 'Напр. 35000' },
+    { name: 'incomeTypeId', label: 'Тип поступления', type: 'select', value: 'personal', options: financeIncomeTypeOptions('personal') },
+    { name: 'accountId', label: 'Счёт', type: 'select', value: account.id, options: financeAccountOptions(account.id) },
+    { name: 'description', label: 'Описание', type: 'textarea', value: '', placeholder: 'Необязательно' },
+    { name: 'date', label: 'Дата', type: 'date', value: today },
+    { name: 'time', label: 'Время', type: 'time', value: hm }
+  ], submitText: 'Подтвердить' });
+  if (!result) return;
+  const amount = normalizeMoneyInput(result.amount); const date = normalizeDateInput(result.date) || today;
+  if (!amount) return;
+  applyFinanceMutation(TSBFinanceCore.createTransaction(getFinanceStateV2(), { type:'INCOME', amount, incomeTypeId:result.incomeTypeId, accountId:result.accountId, description:result.description, date, time:result.time }, { idFactory:uid }), 'Поступление добавлено');
+}
+async function openFinanceV2TransferDialog() {
+  const accounts = getFinanceAccounts(); if (accounts.length < 2) { showToast('Для перевода нужно минимум два счёта'); return; }
+  const now = new Date(); const today = toISODate(now); const hm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const result = await openEditDialog({ title: 'Перевод между счетами', fields: [
+    { name:'amount', label:'Сумма', value:'', placeholder:'Напр. 5000' },
+    { name:'fromAccountId', label:'Откуда', type:'select', value:accounts[0].id, options:financeAccountOptions(accounts[0].id) },
+    { name:'toAccountId', label:'Куда', type:'select', value:accounts[1].id, options:financeAccountOptions(accounts[1].id) },
+    { name:'date', label:'Дата', type:'date', value:today },
+    { name:'time', label:'Время', type:'time', value:hm }
+  ], submitText:'Подтвердить' });
+  if (!result) return;
+  const amount=normalizeMoneyInput(result.amount); const date=normalizeDateInput(result.date)||today; if(!amount) return;
+  const mutation=TSBFinanceCore.createTransaction(getFinanceStateV2(), { type:'TRANSFER', amount, fromAccountId:result.fromAccountId, toAccountId:result.toAccountId, date, time:result.time }, { idFactory:uid });
+  if (!mutation.ok && mutation.error==='TRANSFER_FIELDS') { showToast('Выбери разные счета'); return; }
+  applyFinanceMutation(mutation,'Перевод добавлен');
+}
+function bindFinanceV2Screen(root) {
+  root.querySelector('[data-finance-v2-account-add]')?.addEventListener('click', () => openFinanceV2AccountDialog());
+  root.querySelectorAll('[data-finance-v2-account-edit]').forEach(button => button.onclick = () => openFinanceV2AccountDialog(button.dataset.financeV2AccountEdit));
+  root.querySelectorAll('[data-finance-v2-account-archive]').forEach(button => button.onclick = () => archiveFinanceV2Account(button.dataset.financeV2AccountArchive));
+  root.querySelector('[data-finance-v2-income-add]')?.addEventListener('click', openFinanceV2IncomeDialog);
+  root.querySelector('[data-finance-v2-transfer-add]')?.addEventListener('click', openFinanceV2TransferDialog);
+  root.querySelectorAll('[data-finance-v2-open]').forEach(row => row.onclick = event => { if (event.target.closest('button')) return; openFinanceV2TransactionEditor(row.dataset.financeV2Open); });
+  root.querySelector('[data-finance-v2-history-open]')?.addEventListener('click', () => { state.financeHistoryOpen = true; renderFinance(); });
+}
+
 function renderFinance() {
   const root = $('#tab-finance');
   if (!root) return;
-  const summary = getFinanceSummary();
-  const context = getFinanceContext();
-  const nextIncome = getNextIncome();
-  const nextObligation = getUpcomingPlanItems(context.obligations.filter(item => item.status !== 'paid'), 1)[0] || null;
-  const totalUnderControl = moneyNumber(context.availableBalance) + moneyNumber(context.reserveBalance);
+  if (state.financeHistoryOpen && typeof renderFinanceHistoryV2 === 'function') { renderFinanceHistoryV2(root); return; }
+  const finance = getFinanceStateV2();
+  const accounts = getFinanceAccounts();
+  const recent = getFinanceTransactions().slice(0, 8);
   root.innerHTML = `
-    ${renderGptAdviceCard('finance')}
-
-    <section class="grid-3 finance-top-grid">
-      <div class="stat-card"><div class="muted">Доступно сейчас</div><div class="stat-value">${context.availableBalance ? formatRub(context.availableBalance) : '—'}</div><div class="muted">Живой баланс</div></div>
-      <div class="stat-card"><div class="muted">Активы / резерв</div><div class="stat-value small-stat">${context.reserveBalance ? formatRub(context.reserveBalance) : '—'}</div><div class="muted">Не списывается обычными тратами</div></div>
-      <div class="stat-card"><div class="muted">Под контролем</div><div class="stat-value small-stat">${totalUnderControl ? formatRub(totalUnderControl) : '—'}</div><div class="muted">Доступно + активы</div></div>
+    <section class="card finance-v2-hero">
+      <div class="card-title-row"><div><h2>Финансы</h2><p class="muted">Общий баланс всех активных счетов.</p></div></div>
+      <div class="finance-v2-total">${formatRub(getFinanceTotalBalance())}</div>
+      <div class="finance-v2-primary-actions"><button class="primary-button" type="button" data-finance-v2-income-add>+ Поступление</button><button class="ghost-button" type="button" data-finance-v2-transfer-add>Перевод</button></div>
     </section>
 
-    <section class="card">
-      <div class="card-title-row">
-        <div>
-          <h2>Баланс</h2>
-          <p class="muted">Укажи фактическую доступную сумму. Разница автоматически запишется как корректировка, без лишних вопросов.</p>
-        </div>
-        <button class="icon-button help-button" type="button" data-finance-help title="Как заполнять">?</button>
-      </div>
-      <form class="form-grid finance-context" data-finance-context-form>
-        <label>Доступно сейчас, ₽<input name="availableBalance" inputmode="decimal" placeholder="Напр. 12500" value="${escapeHTML(context.availableBalance || '')}"></label>
-        <label>Активы / резерв, ₽<input name="reserveBalance" inputmode="decimal" placeholder="Напр. 5000" value="${escapeHTML(context.reserveBalance || '')}"></label>
-        <button class="primary-button" type="submit">Обновить</button>
-      </form>
+    <section class="card finance-v2-accounts-card">
+      <div class="card-title-row"><div><h2>Счета</h2><p class="muted">Обычные траты идут со счёта по умолчанию.</p></div><button class="ghost-button small" type="button" data-finance-v2-account-add>+ Счёт</button></div>
+      <div class="finance-v2-accounts">${accounts.map(renderFinanceV2AccountCard).join('') || '<div class="empty">Счетов пока нет.</div>'}</div>
     </section>
 
-    <section class="card">
-      <div class="card-title-row">
-        <div>
-          <h2>Траты выбранного дня</h2>
-          <p class="muted">Траты уменьшают доступный баланс. Если трат не было — закрой день одной кнопкой.</p>
-        </div>
-      </div>
-      ${renderFinanceDaySummary(summary)}
-      ${renderFinanceQuickForm('finance')}
-      ${renderFinanceNoExpensesButton(state.selectedDate)}
-      <div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, false)}</div>
+    <section class="card finance-v2-recent-card">
+      <div class="card-title-row"><div><h2>Последние операции</h2><p class="muted">Последние расходы, поступления и переводы.</p></div></div>
+      <div class="finance-list">${recent.length ? recent.map(transaction => renderFinanceV2TransactionRow(transaction)).join('') : '<div class="empty">Операций пока нет.</div>'}</div>
+      <button class="ghost-button finance-v2-history-button" type="button" data-finance-v2-history-open>Вся история</button>
     </section>
-
-    <section class="grid-2 finance-plan-grid">
-      <div class="card finance-plan-card">
-        ${renderCollapsedBlock('Плановые поступления', `<p class="muted">После кнопки “Получено” сумма попадёт в баланс и историю.</p>${renderFinancePlanForm('income')}<div class="finance-list">${renderFinancePlanList('income')}</div>`, `${context.incomes.filter(item => item.status !== 'received').length}`, { key: 'finance-incomes' })}
-      </div>
-      <div class="card finance-plan-card">
-        ${renderCollapsedBlock('Обязательные расходы', `<p class="muted">После кнопки “Оплачено” сумма спишется с баланса и уйдёт в историю.</p>${renderFinancePlanForm('obligation')}<div class="finance-list">${renderFinancePlanList('obligation')}</div>`, `${context.obligations.filter(item => item.status !== 'paid').length}`, { key: 'finance-obligations' })}
-      </div>
-    </section>
-
-    <details class="card collapsible-list finance-history-details">
-      <summary>История операций · ${context.operations.length}</summary>
-      <div class="finance-list">${renderFinanceOperationsHistory()}</div>
-    </details>
-
-    <details class="card collapsible-list finance-goals-details">
-      <summary>Финансовые цели</summary>
-      ${renderFinanceGoalsForm(context)}
-    </details>
   `;
-  bindCommonActions(root);
-  bindClick(root, '[data-finance-help]', openFinanceHelpDialog);
+  bindFinanceV2Screen(root);
 }
 
 function renderFinanceGoalsForm(context) {

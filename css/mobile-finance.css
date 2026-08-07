@@ -1,3 +1,23 @@
 /* TSB Hub v0.9.0 - Finance v1 styles */
 @media(max-width:900px){.app-shell{padding-bottom:calc(176px + env(safe-area-inset-bottom))!important}.tab-page.active{padding-bottom:calc(104px + env(safe-area-inset-bottom))}#tab-finance{gap:10px!important}.finance-v1-hero,.finance-v1-expense,.finance-v1-next,.finance-v1-manage{display:grid;gap:10px;background:rgba(23,32,51,.78)}.finance-v1-hero{border-color:rgba(34,197,94,.28)}.finance-v1-warn{border-color:rgba(245,158,11,.38)!important}.finance-v1-bad{border-color:rgba(248,113,113,.45)!important}.finance-v1-status{display:flex;align-items:center;justify-content:space-between;gap:8px}.finance-v1-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.finance-v1-grid .stat-card{padding:10px}.finance-v1-grid .stat-card.main{grid-column:1/-1}.finance-v1-grid .stat-card.main .stat-value{font-size:1.55rem}.finance-v1-form{display:grid;grid-template-columns:1fr 1fr;gap:8px}.finance-v1-form label{display:grid;gap:6px}.finance-v1-form button{grid-column:1/-1;min-height:46px}.finance-events-list,.finance-list{display:grid;gap:8px}.finance-event{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:14px;border:1px solid rgba(148,163,184,.16);background:rgba(15,23,42,.34)}.finance-event.income{border-color:rgba(34,197,94,.22)}.finance-event.obligation{border-color:rgba(248,113,113,.20)}.finance-event .ghost-button{min-height:34px;white-space:nowrap}.finance-v1-manage>summary,.finance-v1-history>summary{min-height:44px;font-weight:900}.finance-v1-manage-grid{display:grid;gap:8px;margin:8px 0}.finance-v1-manage .form-grid{grid-template-columns:1fr!important}.finance-v1-history>p{margin-top:8px}.finance-card .actions{display:grid;gap:6px;grid-template-columns:1fr}.finance-card .actions button{min-height:34px}}
 @media(max-width:380px){.finance-v1-grid,.finance-v1-form{grid-template-columns:1fr}.finance-event{align-items:flex-start;flex-direction:column}.finance-event .ghost-button{width:100%}.finance-v1-status{align-items:flex-start;flex-direction:column}}
+
+
+/* Finance v2 Part 1 — accounts and recent operations */
+.finance-v2-hero,.finance-v2-accounts-card,.finance-v2-recent-card{overflow:hidden}
+.finance-v2-total{font-size:clamp(2rem,9vw,3.25rem);font-weight:900;letter-spacing:-.045em;margin:8px 0 16px}
+.finance-v2-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.finance-v2-accounts{display:grid;gap:10px;margin-top:10px}
+.finance-v2-account{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025)}
+.finance-v2-account.default{border-color:rgba(139,92,246,.36);background:rgba(139,92,246,.055)}
+.finance-v2-account h3{margin:5px 0 2px}
+.finance-v2-account-balance{font-size:1.1rem;font-weight:850}
+.finance-v2-account-note{font-size:.78rem;margin-top:4px!important}
+.finance-v2-operation{cursor:pointer;transition:transform .12s ease,border-color .12s ease}
+.finance-v2-operation:active{transform:scale(.995)}
+.finance-v2-operation.income h3{color:#86efac}
+.finance-v2-operation.expense h3{color:#fca5a5}
+.finance-v2-operation.transfer h3{color:#c4b5fd}
+.finance-v2-chevron{font-size:1.6rem;opacity:.45;align-self:center}
+.finance-v2-history-button{width:100%;margin-top:12px}
+@media(max-width:560px){.finance-v2-primary-actions{grid-template-columns:1fr 1fr}.finance-v2-account{align-items:flex-start}.finance-v2-account .actions{flex-shrink:0}}

@@ -86,3 +86,14 @@ test('full JSON roundtrip preserves all Part2 indicators after payment and trans
   const snap={total:core.getTotalBalance(f),card:core.getAccountBalance(f,'card'),cash:core.getAccountBalance(f,'cash'),reserved:core.getTotalReservedAmount(f),upcoming:core.getUpcomingObligationsTotal(f,{fromDate:'2026-08-15'}),free:core.getFreeMoney(f,{fromDate:'2026-08-15'}),tx:f.transactions.length,ob:f.obligations.length};
   const reload=core.normalizeFinance(JSON.parse(JSON.stringify(f)),'2026-08-15T20:00:00.000Z');const after={total:core.getTotalBalance(reload),card:core.getAccountBalance(reload,'card'),cash:core.getAccountBalance(reload,'cash'),reserved:core.getTotalReservedAmount(reload),upcoming:core.getUpcomingObligationsTotal(reload,{fromDate:'2026-08-15'}),free:core.getFreeMoney(reload,{fromDate:'2026-08-15'}),tx:reload.transactions.length,ob:reload.obligations.length};assert.deepEqual(after,snap);
 });
+
+
+test('planning deficit is allowed for reserves and obligations', () => {
+  let finance = core.createEmptyFinance('2026-08-08T00:00:00.000Z');
+  finance = core.createAccount(finance,{id:'main',name:'Основной',isDefault:true},{now:'2026-08-08T00:00:00.000Z'}).finance;
+  finance = core.createTransaction(finance,{type:'INCOME',amount:1000,accountId:'main',incomeTypeId:'other',date:'2026-08-08'},{now:'2026-08-08T00:00:00.000Z'}).finance;
+  const reserve = core.createReserve(finance,{name:'Загранпаспорт',amount:5000},{now:'2026-08-08T00:00:00.000Z',fromDate:'2026-08-08'});
+  assert.equal(reserve.ok,true);assert.equal(reserve.freeMoney,-4000);assert.equal(reserve.hasShortfall,true);
+  const obligation = core.createObligation(reserve.finance,{name:'Платёж через месяц',amount:2000,dueDate:'2026-09-07',recurrence:'MONTHLY'},{now:'2026-08-08T00:00:00.000Z',fromDate:'2026-08-08'});
+  assert.equal(obligation.ok,true);assert.equal(obligation.hasShortfall,true);assert.equal(obligation.obligation.recurrence,'MONTHLY');
+});

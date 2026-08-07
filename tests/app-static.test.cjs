@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const RELEASE='0.13.1-finance-mobile-fix-20260808';
+const RELEASE='0.13.2-finance-planning-deficit-20260808';
 const app=fs.readFileSync('js/app.js','utf8');
 const index=fs.readFileSync('index.html','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');
@@ -14,9 +14,9 @@ assert.ok(app.includes('function renderFinanceV2AccountCard'),'Finance v2 accoun
 assert.ok(app.includes('Последние операции'),'Finance v2 recent operations missing');
 
 assert.ok(app.includes('function renderFinanceHistoryV2'),'unified history missing');
-assert.ok(app.includes("const APP_VERSION = '0.13.1-finance-mobile-fix'"),'app version mismatch');
+assert.ok(app.includes("const APP_VERSION = '0.13.2-finance-planning-deficit'"),'app version mismatch');
 assert.equal(index.includes('finance-module-v1.js'),false,'legacy finance module reference remains');
-assert.ok(index.includes('0.13.1-finance-mobile-fix-20260808'),'release shell mismatch');
+assert.ok(index.includes('0.13.2-finance-planning-deficit-20260808'),'release shell mismatch');
 const sw=fs.readFileSync('service-worker.js','utf8');
 assert.ok(sw.includes('js/finance-core.js'),'service worker must cache finance core');
 assert.equal(sw.includes('finance-module-v1.js'),false,'service worker still references Finance v1');
@@ -81,8 +81,8 @@ assert.equal(app.includes("$$('[data-finance-context-form]', root)"),false,'lega
 assert.equal(app.includes("$$('[data-finance-plan-complete]', root)"),false,'legacy plan completion binder remains');
 assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 override module must not exist');
 assert.equal(fs.existsSync('js/finance-module-v2.js'),false,'Finance Part2 override file must not exist');
-assert.ok(app.includes(`service-worker.js?v=0.13.1-finance-mobile-fix-20260808`),'direct service worker registration must use current release');
-assert.ok(sw.includes(`const RELEASE='0.13.1-finance-mobile-fix-20260808'`),'service worker release mismatch');
+assert.ok(app.includes(`service-worker.js?v=0.13.2-finance-planning-deficit-20260808`),'direct service worker registration must use current release');
+assert.ok(sw.includes(`const RELEASE='0.13.2-finance-planning-deficit-20260808'`),'service worker release mismatch');
 const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
 const version=JSON.parse(fs.readFileSync('version.json','utf8'));
 assert.equal(manifest.version,RELEASE,'manifest release mismatch');

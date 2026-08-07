@@ -221,10 +221,11 @@ test('reserve API changes allocation but never account balances',()=>{
   r=core.archiveReserve(f,'r1');assert.equal(r.ok,true);f=r.finance;assert.equal(core.getTotalReservedAmount(f),0);assert.equal(core.getTotalBalance(f),total);
 });
 
-test('reserve API rejects negative amounts and new over-allocation',()=>{
+test('reserve API rejects negative amounts but allows planning over-allocation',()=>{
   let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:1000,accountId:'a1',date:'2026-08-07'}).finance;
   assert.equal(core.createReserve(f,{name:'bad',amount:-1},{fromDate:'2026-08-07'}).error,'INVALID_RESERVE_AMOUNT');
-  assert.equal(core.createReserve(f,{name:'too much',amount:1500},{fromDate:'2026-08-07'}).error,'INSUFFICIENT_FREE_MONEY');
+  const planned=core.createReserve(f,{name:'too much',amount:1500},{fromDate:'2026-08-07'});
+  assert.equal(planned.ok,true);assert.equal(planned.freeMoney,-500);assert.equal(planned.hasShortfall,true);
   let r=core.createReserve(f,{id:'r',name:'ok',amount:500},{fromDate:'2026-08-07'});f=r.finance;
   assert.equal(core.adjustReserveAmount(f,'r',-600,{fromDate:'2026-08-07'}).error,'INVALID_RESERVE_AMOUNT');
 });

@@ -558,7 +558,6 @@
     const totalAccounts=getTotalBalance(finance);const reserved=getTotalReservedAmount(finance);const upcoming=getUpcomingObligationsTotal(finance,options);const afterReserves=roundMoney(totalAccounts-reserved);const free=roundMoney(afterReserves-upcoming);
     return {totalAccounts,reserved,upcoming,afterReserves,free,covered:free>=0,shortfall:free>=0?0:roundMoney(Math.abs(free))};
   }
-  function worsensNegative(before,after){return after<0&&after<before}
   function validateReserveDraft(draft){
     if(!text(draft?.name))return {ok:false,error:'NAME_REQUIRED'};
     if(Object.prototype.hasOwnProperty.call(draft||{},'amount')&&moneyNumber(draft.amount)<0)return {ok:false,error:'INVALID_RESERVE_AMOUNT'};
@@ -569,16 +568,14 @@
     const state=normalizeFinance(finance,now);const check=validateReserveDraft(draft);if(!check.ok)return {ok:false,error:check.error,finance:state};
     const reserve=normalizeReserve({...clone(draft),id:text(draft?.id)||idFactory('reserve'),createdAt:now,updatedAt:now,active:true,archived:false},state.reserves.length,now);
     if(state.reserves.some(item=>item.id===reserve.id))return {ok:false,error:'DUPLICATE_ID',finance:state};
-    const before=getFreeMoney(state,{fromDate});state.reserves.push(reserve);const after=getFreeMoney(state,{fromDate});
-    if(worsensNegative(before,after)){state.reserves.pop();return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}
-    return {ok:true,finance:state,reserve,freeMoney:after};
+    state.reserves.push(reserve);const after=getFreeMoney(state,{fromDate});
+    return {ok:true,finance:state,reserve,freeMoney:after,hasShortfall:after<0};
   }
   function updateReserve(finance,id,patch,{now=nowISO(),fromDate=isoDateFromNow(now)}={}){
     const state=normalizeFinance(finance,now);const index=state.reserves.findIndex(item=>item.id===id);if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
     const current=state.reserves[index];const candidate={...current,...clone(patch),id:current.id,createdAt:current.createdAt,updatedAt:now};const check=validateReserveDraft(candidate);if(!check.ok)return {ok:false,error:check.error,finance:state};
-    const before=getFreeMoney(state,{fromDate});const reserve=normalizeReserve(candidate,index,now);state.reserves[index]=reserve;const after=getFreeMoney(state,{fromDate});
-    if(worsensNegative(before,after)){state.reserves[index]=current;return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}
-    return {ok:true,finance:state,reserve,freeMoney:after};
+    const reserve=normalizeReserve(candidate,index,now);state.reserves[index]=reserve;const after=getFreeMoney(state,{fromDate});
+    return {ok:true,finance:state,reserve,freeMoney:after,hasShortfall:after<0};
   }
   function adjustReserveAmount(finance,id,delta,options={}){
     const state=normalizeFinance(finance,options.now);const reserve=state.reserves.find(item=>item.id===id);if(!reserve)return {ok:false,error:'NOT_FOUND',finance:state};
@@ -610,18 +607,16 @@
     const state=normalizeFinance(finance,now);const check=validateObligationDraft(draft);if(!check.ok)return {ok:false,error:check.error,finance:state};
     const obligation=normalizeObligation({...clone(draft),id:text(draft?.id)||idFactory('obligation'),status:OBLIGATION_STATUS.ACTIVE,linkedTransactionId:null,createdAt:now,updatedAt:now},state.obligations.length,now);
     if(state.obligations.some(item=>item.id===obligation.id))return {ok:false,error:'DUPLICATE_ID',finance:state};
-    const before=getFreeMoney(state,{fromDate});state.obligations.push(obligation);const after=getFreeMoney(state,{fromDate});
-    if(worsensNegative(before,after)){state.obligations.pop();return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}
-    return {ok:true,finance:state,obligation,freeMoney:after};
+    state.obligations.push(obligation);const after=getFreeMoney(state,{fromDate});
+    return {ok:true,finance:state,obligation,freeMoney:after,hasShortfall:after<0};
   }
   function updateObligation(finance,id,patch,{now=nowISO(),fromDate=isoDateFromNow(now)}={}){
     const state=normalizeFinance(finance,now);const index=state.obligations.findIndex(item=>item.id===id);if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
     const current=state.obligations[index];if(current.status!==OBLIGATION_STATUS.ACTIVE)return {ok:false,error:'OBLIGATION_NOT_ACTIVE',finance:state};
     const editable={name:patch?.name??current.name,amount:patch?.amount??current.amount,dueDate:patch?.dueDate??current.dueDate,recurrence:patch?.recurrence??current.recurrence,note:patch?.note??current.note};
     const check=validateObligationDraft(editable);if(!check.ok)return {ok:false,error:check.error,finance:state};
-    const before=getFreeMoney(state,{fromDate});const obligation=normalizeObligation({...current,...editable,id:current.id,status:current.status,linkedTransactionId:current.linkedTransactionId,updatedAt:now},index,now);state.obligations[index]=obligation;const after=getFreeMoney(state,{fromDate});
-    if(worsensNegative(before,after)){state.obligations[index]=current;return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}
-    return {ok:true,finance:state,obligation,freeMoney:after};
+    const obligation=normalizeObligation({...current,...editable,id:current.id,status:current.status,linkedTransactionId:current.linkedTransactionId,updatedAt:now},index,now);state.obligations[index]=obligation;const after=getFreeMoney(state,{fromDate});
+    return {ok:true,finance:state,obligation,freeMoney:after,hasShortfall:after<0};
   }
   function cancelObligation(finance,id,{now=nowISO()}={}){
     const state=normalizeFinance(finance,now);const obligation=state.obligations.find(item=>item.id===id);if(!obligation)return {ok:false,error:'NOT_FOUND',finance:state};if(obligation.status!==OBLIGATION_STATUS.ACTIVE)return {ok:false,error:'OBLIGATION_NOT_ACTIVE',finance:state};

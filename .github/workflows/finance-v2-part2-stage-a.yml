@@ -1,0 +1,34 @@
+name: Finance v2 Part2 Stage A
+on:
+  push:
+    branches: [finance-v2-part2-work]
+permissions:
+  contents: write
+jobs:
+  stage-a:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-v2-part2-work
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply stage A
+        run: python3 scripts/finance-v2-part2-stage-a.py
+      - name: Test
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Build check
+        run: npm run build
+      - name: Commit stage A
+        run: |
+          rm -f scripts/finance-v2-part2-stage-a.py .github/workflows/finance-v2-part2-stage-a.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Finance v2 Part2 A: reserves obligations model and migration'
+          git push origin HEAD:finance-v2-part2-work

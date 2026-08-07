@@ -291,6 +291,129 @@
     return {finance:normalizeFinance(result,now),financeContext:legacyContext,archives:nextArchives,migrated:true};
   }
 
+
+  function roundMoney(value){return Math.round((Number(value)||0)*100)/100}
+  function getAccount(finance,accountId){return normalizeFinance(finance).accounts.find(account=>account.id===accountId)||null}
+  function getDefaultAccount(finance){
+    const accounts=normalizeFinance(finance).accounts.filter(account=>account.active&&!account.archived);
+    return accounts.find(account=>account.isDefault)||accounts[0]||null;
+  }
+  function getAccountBalance(finance,accountId){
+    const state=normalizeFinance(finance);
+    return roundMoney(state.transactions.reduce((sum,transaction)=>sum+accountEffect(transaction,accountId),0));
+  }
+  function getTotalBalance(finance){
+    const state=normalizeFinance(finance);
+    return roundMoney(state.accounts.filter(account=>!account.archived).reduce((sum,account)=>sum+getAccountBalance(state,account.id),0));
+  }
+  function isSystemLocked(transaction){return transaction?.type===TYPES.ADJUSTMENT&&transaction?.systemKind===SYSTEM_KINDS.MIGRATION_ANCHOR}
+  function transactionSortKey(transaction){return `${transaction?.date||''}T${transaction?.time||'00:00'}|${transaction?.updatedAt||transaction?.createdAt||''}`}
+  function getTransactions(finance,filters={}){
+    const state=normalizeFinance(finance);
+    const type=text(filters.type).toUpperCase();
+    const search=text(filters.search).toLowerCase();
+    return state.transactions.filter(transaction=>{
+      if(filters.includeSystem!==true&&isSystemLocked(transaction))return false;
+      if(type&&type!=='ALL'&&transaction.type!==type)return false;
+      if(validDate(filters.dateFrom)&&transaction.date<filters.dateFrom)return false;
+      if(validDate(filters.dateTo)&&transaction.date>filters.dateTo)return false;
+      if(filters.categoryId&&transaction.categoryId!==filters.categoryId)return false;
+      if(filters.accountId){
+        const matches=transaction.accountId===filters.accountId||transaction.fromAccountId===filters.accountId||transaction.toAccountId===filters.accountId;
+        if(!matches)return false;
+      }
+      if(search&&!text(transaction.description).toLowerCase().includes(search))return false;
+      return true;
+    }).sort((a,b)=>transactionSortKey(b).localeCompare(transactionSortKey(a)));
+  }
+  function transactionExists(finance,id){return normalizeFinance(finance).transactions.some(transaction=>transaction.id===id)}
+  function createTransaction(finance,draft,{now=nowISO(),idFactory=makeId}={}){
+    const state=normalizeFinance(finance,now);
+    const candidate={...clone(draft),id:text(draft?.id)||idFactory('txn'),createdAt:text(draft?.createdAt)||now,updatedAt:now};
+    const transaction=normalizeTransaction(candidate,now);
+    const check=validateTransactionShape(transaction);
+    if(!check.ok)return {ok:false,error:check.error,finance:state};
+    if(transactionExists(state,transaction.id))return {ok:false,error:'DUPLICATE_ID',finance:state};
+    state.transactions.push(transaction);
+    return {ok:true,finance:state,transaction};
+  }
+  function updateTransaction(finance,id,patch,{now=nowISO()}={}){
+    const state=normalizeFinance(finance,now);
+    const index=state.transactions.findIndex(transaction=>transaction.id===id);
+    if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
+    const current=state.transactions[index];
+    if(isSystemLocked(current))return {ok:false,error:'SYSTEM_LOCKED',finance:state};
+    const candidate={...current,...clone(patch),id:current.id,type:current.type,createdAt:current.createdAt,updatedAt:now};
+    const transaction=normalizeTransaction(candidate,now);
+    const check=validateTransactionShape(transaction);
+    if(!check.ok)return {ok:false,error:check.error,finance:state};
+    state.transactions[index]=transaction;
+    return {ok:true,finance:state,transaction,previous:current};
+  }
+  function deleteTransaction(finance,id){
+    const state=normalizeFinance(finance);
+    const index=state.transactions.findIndex(transaction=>transaction.id===id);
+    if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
+    const transaction=state.transactions[index];
+    if(isSystemLocked(transaction))return {ok:false,error:'SYSTEM_LOCKED',finance:state};
+    state.transactions.splice(index,1);
+    return {ok:true,finance:state,transaction};
+  }
+  function createAccount(finance,draft,{now=nowISO(),idFactory=makeId}={}){
+    const state=normalizeFinance(finance,now);
+    const account=normalizeAccount({...clone(draft),id:text(draft?.id)||idFactory('acct'),createdAt:now,updatedAt:now},state.accounts.length,now);
+    if(state.accounts.some(item=>item.id===account.id))return {ok:false,error:'DUPLICATE_ID',finance:state};
+    if(account.isDefault)state.accounts.forEach(item=>item.isDefault=false);
+    if(!state.accounts.length)account.isDefault=true;
+    state.accounts.push(account);
+    return {ok:true,finance:state,account};
+  }
+  function updateAccount(finance,id,patch,{now=nowISO()}={}){
+    const state=normalizeFinance(finance,now);
+    const index=state.accounts.findIndex(account=>account.id===id);
+    if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
+    const current=state.accounts[index];
+    const account=normalizeAccount({...current,...clone(patch),id:current.id,createdAt:current.createdAt,updatedAt:now},index,now);
+    if(account.isDefault)state.accounts.forEach(item=>item.isDefault=false);
+    state.accounts[index]=account;
+    if(!state.accounts.some(item=>item.isDefault&&!item.archived)){
+      const fallback=state.accounts.find(item=>!item.archived&&item.active);
+      if(fallback)fallback.isDefault=true;
+    }
+    return {ok:true,finance:state,account};
+  }
+  function archiveAccount(finance,id,{now=nowISO()}={}){
+    const state=normalizeFinance(finance,now);
+    const account=state.accounts.find(item=>item.id===id);
+    if(!account)return {ok:false,error:'NOT_FOUND',finance:state};
+    if(state.accounts.filter(item=>!item.archived&&item.active).length<=1)return {ok:false,error:'LAST_ACTIVE_ACCOUNT',finance:state};
+    return updateAccount(state,id,{archived:true,active:false,isDefault:false},{now});
+  }
+  function upsertNamedCollection(finance,key,draft,{now=nowISO(),idFactory=makeId}={}){
+    const state=normalizeFinance(finance,now);
+    const list=state[key];
+    if(!Array.isArray(list))return {ok:false,error:'UNKNOWN_COLLECTION',finance:state};
+    const id=text(draft?.id)||idFactory(key==='categories'?'cat':'income_type');
+    const index=list.findIndex(item=>item.id===id);
+    const base=index>=0?list[index]:{id,system:false,active:true,archived:false,sortOrder:list.length,createdAt:now};
+    const item={...base,...clone(draft),id,name:text(draft?.name??base.name),updatedAt:now};
+    if(!item.name)return {ok:false,error:'NAME_REQUIRED',finance:state};
+    if(index>=0)list[index]=item;else list.push(item);
+    return {ok:true,finance:state,item};
+  }
+  function archiveNamedItem(finance,key,id,{now=nowISO()}={}){
+    const state=normalizeFinance(finance,now);
+    const list=state[key];
+    const index=Array.isArray(list)?list.findIndex(item=>item.id===id):-1;
+    if(index<0)return {ok:false,error:'NOT_FOUND',finance:state};
+    list[index]={...list[index],active:false,archived:true,updatedAt:now};
+    return {ok:true,finance:state,item:list[index]};
+  }
+  function createOrUpdateCategory(finance,draft,options){return upsertNamedCollection(finance,'categories',draft,options)}
+  function archiveCategory(finance,id,options){return archiveNamedItem(finance,'categories',id,options)}
+  function createOrUpdateIncomeType(finance,draft,options){return upsertNamedCollection(finance,'incomeTypes',draft,options)}
+  function archiveIncomeType(finance,id,options){return archiveNamedItem(finance,'incomeTypes',id,options)}
+
   function validateTransactionShape(transaction){
     const row=normalizeTransaction(transaction);
     if(!row)return {ok:false,error:'UNKNOWN_TYPE'};
@@ -313,6 +436,9 @@
     FINANCE_SCHEMA_VERSION,MIGRATION_CHECKPOINT,TYPES,SYSTEM_KINDS,
     clone,makeId,moneyNumber,createDefaultCategories,createDefaultIncomeTypes,createEmptyFinance,
     normalizeAccount,normalizeTransaction,normalizeFinance,validateTransactionShape,
-    accountEffect,isMigrationComplete,migrateLegacyState
+    accountEffect,isMigrationComplete,migrateLegacyState,
+    getAccount,getDefaultAccount,getAccountBalance,getTotalBalance,getTransactions,isSystemLocked,
+    createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,
+    createOrUpdateCategory,archiveCategory,createOrUpdateIncomeType,archiveIncomeType
   });
 });

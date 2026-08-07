@@ -85,3 +85,49 @@ test('migration backup is created once and migration is idempotent',()=>{
   assert.deepEqual(second.finance.transactions.map(x=>x.id),first.finance.transactions.map(x=>x.id));
   assert.deepEqual(second.archives.financeV1MigrationBackup,originalBackup);
 });
+
+
+test('balances are derived from expense, income and transfer operations',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true},{now:'2026-08-07T00:00:00.000Z'}).finance;
+  f=core.createAccount(f,{id:'a2',name:'Наличные'},{now:'2026-08-07T00:00:00.000Z'}).finance;
+  f=core.createTransaction(f,{id:'in',type:'INCOME',amount:10000,accountId:'a1',incomeTypeId:'personal',date:'2026-08-07'},{now:'2026-08-07T10:00:00.000Z'}).finance;
+  f=core.createTransaction(f,{id:'out',type:'EXPENSE',amount:2000,accountId:'a1',categoryId:'food',date:'2026-08-07'},{now:'2026-08-07T11:00:00.000Z'}).finance;
+  f=core.createTransaction(f,{id:'move',type:'TRANSFER',amount:3000,fromAccountId:'a1',toAccountId:'a2',date:'2026-08-07'},{now:'2026-08-07T12:00:00.000Z'}).finance;
+  assert.equal(core.getAccountBalance(f,'a1'),5000);
+  assert.equal(core.getAccountBalance(f,'a2'),3000);
+  assert.equal(core.getTotalBalance(f),8000);
+});
+
+test('editing and deleting transactions recalculate balances without double effects',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true},{now:'2026-08-07T00:00:00.000Z'}).finance;
+  f=core.createTransaction(f,{id:'anchor',type:'ADJUSTMENT',amount:1000,accountId:'a1',date:'2026-08-07'}).finance;
+  f=core.createTransaction(f,{id:'e1',type:'EXPENSE',amount:100,accountId:'a1',categoryId:'food',date:'2026-08-07'}).finance;
+  assert.equal(core.getAccountBalance(f,'a1'),900);
+  const edited=core.updateTransaction(f,'e1',{amount:150});assert.equal(edited.ok,true);f=edited.finance;
+  assert.equal(core.getAccountBalance(f,'a1'),850);
+  const deleted=core.deleteTransaction(f,'e1');assert.equal(deleted.ok,true);f=deleted.finance;
+  assert.equal(core.getAccountBalance(f,'a1'),1000);
+});
+
+test('migration anchors are hidden and cannot be edited or deleted',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f.accounts=[{id:'a1',name:'Карта',active:true,archived:false,isDefault:true,createdAt:'2026-08-07T00:00:00.000Z'}];
+  f.transactions=[core.normalizeTransaction({id:'m1',type:'ADJUSTMENT',amount:1000,accountId:'a1',systemKind:'MIGRATION_ANCHOR',date:'2026-08-07'},'2026-08-07T00:00:00.000Z')];
+  assert.equal(core.getTransactions(f).length,0);
+  assert.equal(core.getTransactions(f,{includeSystem:true}).length,1);
+  assert.equal(core.updateTransaction(f,'m1',{amount:5}).error,'SYSTEM_LOCKED');
+  assert.equal(core.deleteTransaction(f,'m1').error,'SYSTEM_LOCKED');
+});
+
+test('transaction filters use the same source of truth',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createTransaction(f,{id:'e1',type:'EXPENSE',amount:100,accountId:'a1',categoryId:'food',description:'магазин',date:'2026-08-06'}).finance;
+  f=core.createTransaction(f,{id:'e2',type:'EXPENSE',amount:200,accountId:'a1',categoryId:'transport',description:'бензин',date:'2026-08-07'}).finance;
+  f=core.createTransaction(f,{id:'i1',type:'INCOME',amount:500,accountId:'a1',incomeTypeId:'personal',description:'работа',date:'2026-08-07'}).finance;
+  assert.deepEqual(core.getTransactions(f,{type:'EXPENSE',dateFrom:'2026-08-07'}).map(x=>x.id),['e2']);
+  assert.deepEqual(core.getTransactions(f,{categoryId:'food'}).map(x=>x.id),['e1']);
+  assert.deepEqual(core.getTransactions(f,{search:'бенз'}).map(x=>x.id),['e2']);
+});

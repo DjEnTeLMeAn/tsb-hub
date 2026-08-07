@@ -2,9 +2,11 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const core=require('../js/finance-core.js');
 
-test('empty finance uses schema v2 and default dictionaries',()=>{
+test('empty finance uses schema v3 with Part 2 collections and default dictionaries',()=>{
   const f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
-  assert.equal(f.schemaVersion,2);
+  assert.equal(f.schemaVersion,3);
+  assert.deepEqual(f.reserves,[]);
+  assert.deepEqual(f.obligations,[]);
   assert.ok(f.categories.some(x=>x.id==='food'));
   assert.ok(f.incomeTypes.some(x=>x.id==='per_diem'));
 });
@@ -52,7 +54,7 @@ test('legacy migration preserves reserve as legacy and migrates only completed e
   };
   const r=core.migrateLegacyState({finance:legacyFinance,financeContext:legacyContext,archives:{},now:'2026-08-07T18:00:00.000Z',idFactory:(p)=>`${p}_generated`});
   assert.equal(r.migrated,true);
-  assert.equal(r.finance.schemaVersion,2);
+  assert.equal(r.finance.schemaVersion,3);
   assert.equal(r.finance.migration.checkpoint,core.MIGRATION_CHECKPOINT);
   assert.equal(r.finance.accounts.length,1);
   assert.equal(r.financeContext.reserveBalance,'5000');
@@ -152,4 +154,56 @@ test('non-empty account cannot be archived and total balance stays intact',()=>{
   f=core.createTransaction(f,{id:'i1',type:'INCOME',amount:100,accountId:'a2',incomeTypeId:'other',date:'2026-08-07'}).finance;
   const result=core.archiveAccount(f,'a2');
   assert.equal(result.ok,false);assert.equal(result.error,'ACCOUNT_NOT_EMPTY');assert.equal(core.getTotalBalance(result.finance),100);
+});
+
+
+test('Part 2 migration preserves ambiguous legacy reserve for review and does not create money movements',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createTransaction(f,{id:'anchor2',type:'ADJUSTMENT',amount:50000,accountId:'a1',date:'2026-08-07'}).finance;
+  const before=core.getTotalBalance(f);
+  const context={reserveBalance:'15000',incomes:[{id:'pi1',amount:'10000',status:'planned',date:'2026-08-20'}],obligations:[]};
+  const r=core.migratePart2State({finance:f,financeContext:context,now:'2026-08-07T20:00:00.000Z'});
+  assert.equal(r.migrated,true);
+  assert.equal(r.finance.migration.legacyReserveStatus,'REVIEW_REQUIRED');
+  assert.equal(r.finance.migration.legacyReserveAmount,15000);
+  assert.equal(r.finance.reserves.length,0);
+  assert.equal(r.finance.transactions.length,f.transactions.length);
+  assert.equal(core.getTotalBalance(r.finance),before);
+  assert.deepEqual(r.financeContext.incomes,context.incomes);
+});
+
+test('Part 2 migration moves only planned legacy obligations once and keeps balances unchanged',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createTransaction(f,{id:'anchor3',type:'ADJUSTMENT',amount:20000,accountId:'a1',date:'2026-08-07'}).finance;
+  const context={reserveBalance:'',incomes:[{id:'income-plan',amount:'9000',status:'planned',date:'2026-08-25'}],obligations:[
+    {id:'legacy-o1',title:'Интернет',amount:'850',date:'2026-08-12',status:'planned',comment:'дом'},
+    {id:'legacy-paid',title:'Оплачено раньше',amount:'500',date:'2026-08-01',status:'paid'},
+    {id:'legacy-bad',title:'Без даты',amount:'100',date:'',status:'planned'}
+  ]};
+  const before=core.getTotalBalance(f);
+  const first=core.migratePart2State({finance:f,financeContext:context,now:'2026-08-07T20:00:00.000Z',idFactory:p=>`${p}_x`});
+  assert.equal(first.finance.obligations.length,1);
+  assert.equal(first.finance.obligations[0].id,'legacy-o1');
+  assert.equal(first.finance.obligations[0].status,'ACTIVE');
+  assert.equal(first.finance.migration.legacyObligationsMigrated,1);
+  assert.equal(first.finance.migration.legacyObligationsSkipped,1);
+  assert.equal(core.getTotalBalance(first.finance),before);
+  const second=core.migratePart2State({finance:first.finance,financeContext:context,now:'2026-08-08T20:00:00.000Z'});
+  assert.equal(second.migrated,false);
+  assert.equal(second.finance.obligations.length,1);
+  assert.equal(core.getTotalBalance(second.finance),before);
+  assert.deepEqual(second.financeContext.incomes,context.incomes);
+});
+
+test('reserve and obligation normalization enforces non-negative reserve and valid basic fields',()=>{
+  const reserve=core.normalizeReserve({id:'r1',name:'Машина',amount:-50,targetAmount:'110000'},0,'2026-08-07T00:00:00.000Z');
+  assert.equal(reserve.amount,0);
+  assert.equal(reserve.targetAmount,110000);
+  const obligation=core.normalizeObligation({id:'o1',name:'Связь',amount:'350',dueDate:'2026-08-21',recurrence:'monthly',status:'active'},0,'2026-08-07T00:00:00.000Z');
+  assert.equal(obligation.amount,350);
+  assert.equal(obligation.dueDate,'2026-08-21');
+  assert.equal(obligation.recurrence,'MONTHLY');
+  assert.equal(obligation.status,'ACTIVE');
 });

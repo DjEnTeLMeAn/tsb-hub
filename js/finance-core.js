@@ -5,10 +5,13 @@
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
 
-  const FINANCE_SCHEMA_VERSION=2;
+  const FINANCE_SCHEMA_VERSION=3;
   const MIGRATION_CHECKPOINT='FINANCE_V2_PART1_COMPLETE';
+  const PART2_MIGRATION_CHECKPOINT='FINANCE_V2_PART2_MODEL_COMPLETE';
   const TYPES=Object.freeze({EXPENSE:'EXPENSE',INCOME:'INCOME',TRANSFER:'TRANSFER',ADJUSTMENT:'ADJUSTMENT'});
   const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR'});
+  const OBLIGATION_STATUS=Object.freeze({ACTIVE:'ACTIVE',PAID:'PAID',CANCELLED:'CANCELLED'});
+  const OBLIGATION_RECURRENCE=Object.freeze({NONE:'NONE',MONTHLY:'MONTHLY'});
 
   const DEFAULT_CATEGORY_DEFS=Object.freeze([
     ['food','Еда'],['transport','Транспорт'],['home','Дом'],['health','Здоровье'],['other','Другое'],
@@ -32,6 +35,7 @@
   };
   const positiveMoney=value=>Math.abs(moneyNumber(value));
   const signedMoney=value=>moneyNumber(value);
+  const nonNegativeMoney=value=>Math.max(0,moneyNumber(value));
 
   function createDefaultCategories(createdAt=nowISO()){
     return DEFAULT_CATEGORY_DEFS.map(([id,name],index)=>({id,name,active:true,archived:false,system:true,sortOrder:index,createdAt,updatedAt:createdAt}));
@@ -46,7 +50,9 @@
       accounts:[],
       transactions:[],
       categories:createDefaultCategories(createdAt),
-      incomeTypes:createDefaultIncomeTypes(createdAt)
+      incomeTypes:createDefaultIncomeTypes(createdAt),
+      reserves:[],
+      obligations:[]
     };
   }
 
@@ -132,6 +138,40 @@
     return row;
   }
 
+  function normalizeReserve(reserve,index=0,createdAt=nowISO()){
+    const source=reserve&&typeof reserve==='object'?reserve:{};
+    const rawTarget=source.targetAmount;
+    const target=rawTarget===null||rawTarget===undefined||text(rawTarget)===''?null:positiveMoney(rawTarget);
+    return {
+      id:text(source.id)||makeId('reserve'),
+      name:text(source.name)||`Резерв ${index+1}`,
+      amount:nonNegativeMoney(source.amount),
+      targetAmount:target&&target>0?target:null,
+      active:source.active!==false&&!source.archived,
+      archived:bool(source.archived),
+      createdAt:text(source.createdAt)||createdAt,
+      updatedAt:text(source.updatedAt)||text(source.createdAt)||createdAt,
+      sortOrder:Number.isFinite(Number(source.sortOrder))?Number(source.sortOrder):index
+    };
+  }
+  function normalizeObligation(obligation,index=0,createdAt=nowISO()){
+    const source=obligation&&typeof obligation==='object'?obligation:{};
+    const rawStatus=text(source.status).toUpperCase();
+    const rawRecurrence=text(source.recurrence).toUpperCase();
+    return {
+      id:text(source.id)||makeId('obligation'),
+      name:text(source.name??source.title)||`Платёж ${index+1}`,
+      amount:positiveMoney(source.amount),
+      dueDate:validDate(source.dueDate??source.date)?String(source.dueDate??source.date):'',
+      recurrence:Object.values(OBLIGATION_RECURRENCE).includes(rawRecurrence)?rawRecurrence:OBLIGATION_RECURRENCE.NONE,
+      status:Object.values(OBLIGATION_STATUS).includes(rawStatus)?rawStatus:OBLIGATION_STATUS.ACTIVE,
+      note:text(source.note??source.comment),
+      linkedTransactionId:text(source.linkedTransactionId)||null,
+      createdAt:text(source.createdAt)||createdAt,
+      updatedAt:text(source.updatedAt)||text(source.createdAt)||createdAt
+    };
+  }
+
   function normalizeFinance(value,createdAt=nowISO()){
     const source=value&&typeof value==='object'?value:{};
     const defaults=createEmptyFinance(createdAt);
@@ -141,14 +181,25 @@
     const categories=normalizeCollection(source.categories,defaultIds,createdAt);
     const incomeTypes=normalizeCollection(source.incomeTypes,incomeIds,createdAt);
     const transactions=(Array.isArray(source.transactions)?source.transactions:[]).map(item=>normalizeTransaction(item,createdAt)).filter(Boolean);
+    const reserves=(Array.isArray(source.reserves)?source.reserves:[]).map((item,index)=>normalizeReserve(item,index,createdAt));
+    const obligations=(Array.isArray(source.obligations)?source.obligations:[]).map((item,index)=>normalizeObligation(item,index,createdAt));
     if(accounts.length&&!accounts.some(a=>a.isDefault))accounts[0].isDefault=true;
     if(accounts.filter(a=>a.isDefault).length>1){let kept=false;accounts.forEach(a=>{if(a.isDefault&&!kept)kept=true;else if(a.isDefault)a.isDefault=false})}
     return {
       ...defaults,
       ...source,
       schemaVersion:FINANCE_SCHEMA_VERSION,
-      migration:{checkpoint:text(source.migration?.checkpoint),completedAt:text(source.migration?.completedAt)},
-      accounts,categories,incomeTypes,transactions
+      migration:{
+        checkpoint:text(source.migration?.checkpoint),
+        completedAt:text(source.migration?.completedAt),
+        part2Checkpoint:text(source.migration?.part2Checkpoint),
+        part2CompletedAt:text(source.migration?.part2CompletedAt),
+        legacyReserveStatus:text(source.migration?.legacyReserveStatus),
+        legacyReserveAmount:nonNegativeMoney(source.migration?.legacyReserveAmount),
+        legacyObligationsMigrated:Number(source.migration?.legacyObligationsMigrated||0),
+        legacyObligationsSkipped:Number(source.migration?.legacyObligationsSkipped||0)
+      },
+      accounts,categories,incomeTypes,transactions,reserves,obligations
     };
   }
 
@@ -185,7 +236,7 @@
     return 0;
   }
   function isMigrationComplete(finance){
-    return Number(finance?.schemaVersion)===FINANCE_SCHEMA_VERSION&&finance?.migration?.checkpoint===MIGRATION_CHECKPOINT;
+    return Number(finance?.schemaVersion)>=2&&finance?.migration?.checkpoint===MIGRATION_CHECKPOINT;
   }
   function migrateLegacyState({finance,financeContext,archives,now=nowISO(),idFactory=makeId}={}){
     const sourceFinance=finance&&typeof finance==='object'?finance:{};
@@ -196,7 +247,7 @@
       return {finance:normalizeFinance(sourceFinance,now),financeContext:clone(sourceContext),archives:nextArchives,migrated:false};
     }
 
-    const alreadyV2=Number(sourceFinance?.schemaVersion)===FINANCE_SCHEMA_VERSION&&Array.isArray(sourceFinance?.transactions);
+    const alreadyV2=Number(sourceFinance?.schemaVersion)>=2&&Array.isArray(sourceFinance?.transactions);
     if(alreadyV2){
       const normalized=normalizeFinance(sourceFinance,now);
       normalized.migration={checkpoint:MIGRATION_CHECKPOINT,completedAt:text(sourceFinance.migration?.completedAt)||now};
@@ -289,6 +340,58 @@
     legacyContext.financeV2Legacy=true;
 
     return {finance:normalizeFinance(result,now),financeContext:legacyContext,archives:nextArchives,migrated:true};
+  }
+
+
+  function isPart2MigrationComplete(finance){
+    return Number(finance?.schemaVersion)>=FINANCE_SCHEMA_VERSION&&finance?.migration?.part2Checkpoint===PART2_MIGRATION_CHECKPOINT;
+  }
+  function migratePart2State({finance,financeContext,now=nowISO(),idFactory=makeId}={}){
+    const sourceContext=financeContext&&typeof financeContext==='object'?clone(financeContext):{};
+    const state=normalizeFinance(finance,now);
+    if(isPart2MigrationComplete(state))return {finance:state,financeContext:sourceContext,migrated:false};
+
+    const beforeBalance=getTotalBalance(state);
+    const existingIds=new Set(state.obligations.map(item=>item.id));
+    let migratedObligations=0;
+    let skippedObligations=0;
+    (Array.isArray(sourceContext.obligations)?sourceContext.obligations:[]).forEach(item=>{
+      if(String(item?.status||'').toLowerCase()!=='planned')return;
+      const amount=positiveMoney(item?.amount??item?.sum);
+      const dueDate=validDate(item?.date)?item.date:'';
+      if(!amount||!dueDate){skippedObligations+=1;return;}
+      let id=text(item?.id)||idFactory('obligation');
+      if(existingIds.has(id))return;
+      while(existingIds.has(id))id=idFactory('obligation');
+      existingIds.add(id);
+      state.obligations.push(normalizeObligation({
+        id,
+        name:text(item?.title||item?.name)||'Обязательный платёж',
+        amount,
+        dueDate,
+        recurrence:OBLIGATION_RECURRENCE.NONE,
+        status:OBLIGATION_STATUS.ACTIVE,
+        note:text(item?.comment||item?.note),
+        linkedTransactionId:null,
+        createdAt:text(item?.createdAt)||now,
+        updatedAt:now
+      },state.obligations.length,now));
+      migratedObligations+=1;
+    });
+
+    const legacyReservePresent=hasLegacyBalance(sourceContext.reserveBalance)&&nonNegativeMoney(sourceContext.reserveBalance)>0;
+    state.migration={
+      ...state.migration,
+      part2Checkpoint:PART2_MIGRATION_CHECKPOINT,
+      part2CompletedAt:now,
+      legacyReserveStatus:legacyReservePresent?'REVIEW_REQUIRED':'NONE',
+      legacyReserveAmount:legacyReservePresent?nonNegativeMoney(sourceContext.reserveBalance):0,
+      legacyObligationsMigrated:migratedObligations,
+      legacyObligationsSkipped:skippedObligations
+    };
+    const normalized=normalizeFinance(state,now);
+    if(getTotalBalance(normalized)!==beforeBalance)throw new Error('PART2_MIGRATION_BALANCE_CHANGED');
+    return {finance:normalized,financeContext:sourceContext,migrated:true};
   }
 
 
@@ -434,10 +537,10 @@
   }
 
   return Object.freeze({
-    FINANCE_SCHEMA_VERSION,MIGRATION_CHECKPOINT,TYPES,SYSTEM_KINDS,
+    FINANCE_SCHEMA_VERSION,MIGRATION_CHECKPOINT,PART2_MIGRATION_CHECKPOINT,TYPES,SYSTEM_KINDS,OBLIGATION_STATUS,OBLIGATION_RECURRENCE,
     clone,makeId,moneyNumber,createDefaultCategories,createDefaultIncomeTypes,createEmptyFinance,
-    normalizeAccount,normalizeTransaction,normalizeFinance,validateTransactionShape,
-    accountEffect,isMigrationComplete,migrateLegacyState,
+    normalizeAccount,normalizeTransaction,normalizeReserve,normalizeObligation,normalizeFinance,validateTransactionShape,
+    accountEffect,isMigrationComplete,migrateLegacyState,isPart2MigrationComplete,migratePart2State,
     getAccount,getDefaultAccount,getAccountBalance,getTotalBalance,getTransactions,isSystemLocked,
     createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,
     createOrUpdateCategory,archiveCategory,createOrUpdateIncomeType,archiveIncomeType

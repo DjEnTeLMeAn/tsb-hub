@@ -139,7 +139,13 @@ function normalizeData(data) {
     now,
     idFactory: uid
   });
-  let finance = migration.finance;
+  const part2Migration = TSBFinanceCore.migratePart2State({
+    finance: migration.finance,
+    financeContext: migration.financeContext,
+    now,
+    idFactory: uid
+  });
+  let finance = part2Migration.finance;
   if (!finance.accounts.length) {
     const created = TSBFinanceCore.createAccount(finance, { id: 'account_main', name: 'Основной счёт', isDefault: true }, { now, idFactory: uid });
     if (created.ok) finance = created.finance;
@@ -152,7 +158,7 @@ function normalizeData(data) {
     health: data.health || {},
     dailyReports: normalizeDailyReports(data.dailyReports),
     finance,
-    financeContext: normalizeFinanceContext(migration.financeContext),
+    financeContext: normalizeFinanceContext(part2Migration.financeContext),
     gptPlans: normalizeGptPlans(data.gptPlans),
     importantDates: Array.isArray(data.importantDates) ? data.importantDates : [],
     settings: { ...defaults.settings, ...(data.settings || {}) },

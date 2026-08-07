@@ -152,6 +152,145 @@
     };
   }
 
+  function legacyCategoryId(value){
+    const raw=text(value).toLowerCase();
+    const aliases={еда:'food',food:'food',транспорт:'transport',transport:'transport',дом:'home',home:'home',здоровье:'health',health:'health',подписки:'subscriptions',subscriptions:'subscriptions',развлечения:'fun',fun:'fun',другое:'other',other:'other'};
+    return aliases[raw]||'other';
+  }
+  function dateFromLegacy(item,fallbackDate,now){
+    if(validDate(item?.date))return item.date;
+    const completed=text(item?.completedAt||item?.receivedAt||item?.paidAt||item?.createdAt);
+    if(/^\d{4}-\d{2}-\d{2}T/.test(completed))return completed.slice(0,10);
+    return validDate(fallbackDate)?fallbackDate:now.slice(0,10);
+  }
+  function timeFromLegacy(item){
+    if(validTime(item?.time))return item.time;
+    const completed=text(item?.completedAt||item?.receivedAt||item?.paidAt||item?.createdAt);
+    const match=completed.match(/T(\d{2}:\d{2})/);
+    return match?match[1]:'';
+  }
+  function hasLegacyBalance(value){
+    if(value===null||value===undefined)return false;
+    return text(value)!==''&&Number.isFinite(Number(String(value).replace(',','.')));
+  }
+  function accountEffect(transaction,accountId){
+    if(!transaction||!accountId)return 0;
+    if(transaction.type===TYPES.EXPENSE&&transaction.accountId===accountId)return -positiveMoney(transaction.amount);
+    if(transaction.type===TYPES.INCOME&&transaction.accountId===accountId)return positiveMoney(transaction.amount);
+    if(transaction.type===TYPES.ADJUSTMENT&&transaction.accountId===accountId)return signedMoney(transaction.amount);
+    if(transaction.type===TYPES.TRANSFER){
+      if(transaction.fromAccountId===accountId)return -positiveMoney(transaction.amount);
+      if(transaction.toAccountId===accountId)return positiveMoney(transaction.amount);
+    }
+    return 0;
+  }
+  function isMigrationComplete(finance){
+    return Number(finance?.schemaVersion)===FINANCE_SCHEMA_VERSION&&finance?.migration?.checkpoint===MIGRATION_CHECKPOINT;
+  }
+  function migrateLegacyState({finance,financeContext,archives,now=nowISO(),idFactory=makeId}={}){
+    const sourceFinance=finance&&typeof finance==='object'?finance:{};
+    const sourceContext=financeContext&&typeof financeContext==='object'?financeContext:{};
+    const nextArchives=archives&&typeof archives==='object'?clone(archives):{};
+
+    if(isMigrationComplete(sourceFinance)){
+      return {finance:normalizeFinance(sourceFinance,now),financeContext:clone(sourceContext),archives:nextArchives,migrated:false};
+    }
+
+    const alreadyV2=Number(sourceFinance?.schemaVersion)===FINANCE_SCHEMA_VERSION&&Array.isArray(sourceFinance?.transactions);
+    if(alreadyV2){
+      const normalized=normalizeFinance(sourceFinance,now);
+      normalized.migration={checkpoint:MIGRATION_CHECKPOINT,completedAt:text(sourceFinance.migration?.completedAt)||now};
+      return {finance:normalized,financeContext:clone(sourceContext),archives:nextArchives,migrated:false};
+    }
+
+    if(!Object.prototype.hasOwnProperty.call(nextArchives,'financeV1MigrationBackup')){
+      nextArchives.financeV1MigrationBackup={createdAt:now,finance:clone(sourceFinance),financeContext:clone(sourceContext)};
+    }
+
+    const accountId='account_main';
+    const result=createEmptyFinance(now);
+    result.accounts=[normalizeAccount({id:accountId,name:'Основной счёт',type:'',active:true,archived:false,isDefault:true,createdAt:now},0,now)];
+    const transactions=[];
+    const usedIds=new Set();
+    const uniqueId=(preferred,prefix)=>{
+      let id=text(preferred)||idFactory(prefix);
+      while(usedIds.has(id))id=idFactory(prefix);
+      usedIds.add(id);return id;
+    };
+
+    Object.entries(sourceFinance).forEach(([iso,day])=>{
+      if(!validDate(iso)||!Array.isArray(day?.expenses))return;
+      day.expenses.forEach(expense=>{
+        const amount=positiveMoney(expense?.amount??expense?.sum);
+        if(!amount)return;
+        const tx=normalizeTransaction({
+          id:uniqueId(expense?.id,'exp'),type:TYPES.EXPENSE,amount,
+          accountId,categoryId:legacyCategoryId(expense?.category),date:iso,
+          time:validTime(expense?.time)?expense.time:timeFromLegacy(expense),
+          description:text(expense?.detail||expense?.comment),
+          createdAt:text(expense?.createdAt)||now,updatedAt:text(expense?.updatedAt)||text(expense?.createdAt)||now
+        },now);
+        if(tx)transactions.push(tx);
+      });
+    });
+
+    (Array.isArray(sourceContext.incomes)?sourceContext.incomes:[]).filter(item=>item?.status==='received').forEach(item=>{
+      const amount=positiveMoney(item?.amount??item?.sum);if(!amount)return;
+      const tx=normalizeTransaction({
+        id:uniqueId(item?.id,'inc'),type:TYPES.INCOME,amount,accountId,incomeTypeId:'other',
+        date:dateFromLegacy(item,'',now),time:timeFromLegacy(item),
+        description:[text(item?.title||item?.source),text(item?.comment)].filter(Boolean).join(' · '),
+        createdAt:text(item?.createdAt)||now,updatedAt:text(item?.completedAt)||text(item?.createdAt)||now
+      },now);if(tx)transactions.push(tx);
+    });
+
+    (Array.isArray(sourceContext.obligations)?sourceContext.obligations:[]).filter(item=>item?.status==='paid').forEach(item=>{
+      const amount=positiveMoney(item?.amount??item?.sum);if(!amount)return;
+      const tx=normalizeTransaction({
+        id:uniqueId(item?.id,'obl'),type:TYPES.EXPENSE,amount,accountId,categoryId:'other',
+        date:dateFromLegacy(item,'',now),time:timeFromLegacy(item),
+        description:[text(item?.title),text(item?.comment)].filter(Boolean).join(' · '),
+        createdAt:text(item?.createdAt)||now,updatedAt:text(item?.completedAt)||text(item?.createdAt)||now
+      },now);if(tx)transactions.push(tx);
+    });
+
+    (Array.isArray(sourceContext.operations)?sourceContext.operations:[]).filter(op=>String(op?.type||'').toLowerCase()==='adjustment').forEach(op=>{
+      const amount=signedMoney(op?.amount);if(!amount)return;
+      const tx=normalizeTransaction({
+        id:uniqueId(op?.id,'adj'),type:TYPES.ADJUSTMENT,amount,accountId,
+        date:dateFromLegacy(op,op?.date,now),time:timeFromLegacy(op),
+        description:[text(op?.title),text(op?.comment)].filter(Boolean).join(' · '),
+        createdAt:text(op?.createdAt)||now,updatedAt:text(op?.updatedAt)||text(op?.createdAt)||now
+      },now);if(tx)transactions.push(tx);
+    });
+
+    if(hasLegacyBalance(sourceContext.availableBalance)){
+      const target=signedMoney(sourceContext.availableBalance);
+      const imported=Math.round(transactions.reduce((sum,tx)=>sum+accountEffect(tx,accountId),0)*100)/100;
+      const anchor=Math.round((target-imported)*100)/100;
+      if(Math.abs(anchor)>=0.005){
+        transactions.push(normalizeTransaction({
+          id:uniqueId('', 'migration'),type:TYPES.ADJUSTMENT,amount:anchor,accountId,
+          systemKind:SYSTEM_KINDS.MIGRATION_ANCHOR,date:now.slice(0,10),time:'',
+          description:'Миграционная привязка баланса Finance v1',createdAt:now,updatedAt:now
+        },now));
+      }
+    }
+
+    result.transactions=transactions;
+    result.migration={checkpoint:MIGRATION_CHECKPOINT,completedAt:now};
+
+    const legacyContext={...clone(sourceContext)};
+    legacyContext.availableBalance='';
+    legacyContext.reserveBalance=sourceContext.reserveBalance??'';
+    legacyContext.incomes=(Array.isArray(sourceContext.incomes)?sourceContext.incomes:[]).filter(item=>item?.status==='planned');
+    legacyContext.obligations=(Array.isArray(sourceContext.obligations)?sourceContext.obligations:[]).filter(item=>item?.status==='planned');
+    legacyContext.operations=[];
+    legacyContext.financeV2Legacy=true;
+
+    return {finance:normalizeFinance(result,now),financeContext:legacyContext,archives:nextArchives,migrated:true};
+  }
+
   function validateTransactionShape(transaction){
     const row=normalizeTransaction(transaction);
     if(!row)return {ok:false,error:'UNKNOWN_TYPE'};
@@ -173,6 +312,7 @@
   return Object.freeze({
     FINANCE_SCHEMA_VERSION,MIGRATION_CHECKPOINT,TYPES,SYSTEM_KINDS,
     clone,makeId,moneyNumber,createDefaultCategories,createDefaultIncomeTypes,createEmptyFinance,
-    normalizeAccount,normalizeTransaction,normalizeFinance,validateTransactionShape
+    normalizeAccount,normalizeTransaction,normalizeFinance,validateTransactionShape,
+    accountEffect,isMigrationComplete,migrateLegacyState
   });
 });

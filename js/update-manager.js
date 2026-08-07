@@ -1,7 +1,7 @@
-// TSB Hub v0.10.4-summary-fix — single PWA update authority.
+// TSB Hub v0.10.5-noexpense-taskcheck — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.10.4-summary-fix-20260807';
+  const RELEASE='0.10.5-noexpense-taskcheck-20260807';
   const VERSION_URL='./version.json';
   const RELOAD_KEY='tsb_hub_reload_'+RELEASE;
   const nativeRegister='serviceWorker' in navigator?navigator.serviceWorker.register.bind(navigator.serviceWorker):null;

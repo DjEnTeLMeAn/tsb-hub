@@ -47,3 +47,13 @@ assert.ok(app.includes('TSBFinanceCore.payObligation'),'payment UI must use core
 assert.ok(app.includes('TSBFinanceCore.linkObligationToTransaction'),'link UI must use core linking');
 assert.ok(app.includes('data-finance-obligation-link'),'existing-expense link action missing');
 assert.ok(app.includes('reactivatedObligationIds'),'transaction deletion UI must surface obligation reactivation');
+
+
+// Finance v2 Part 2 free money is derived in core and reused by Finance/Today.
+assert.ok(app.includes('function getFinanceFreeMoney'),'free money app selector missing');
+assert.ok(app.includes('TSBFinanceCore.getFreeMoney'),'free money must come from finance core');
+assert.ok(app.includes('function renderFinanceMoneyNowCard'),'money-now card missing');
+assert.ok(app.includes('Всего на счетах'),'money-now total label missing');
+assert.ok(app.includes('Обязательное скоро'),'money-now upcoming label missing');
+assert.ok(app.includes('Свободно: <strong>${formatRub(financeFreeMoney)}'),'Today must show free money');
+assert.ok(app.includes('data-finance-v2-expense-form'),'Today quick expense input must remain unchanged');

@@ -66,3 +66,20 @@
 .finance-v2-obligation-card.cancelled{opacity:.58}
 .finance-v2-closed-obligations>summary{min-height:44px;font-weight:850;cursor:pointer}
 @media(min-width:720px){.finance-v2-obligation-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+
+/* Finance v2 Part 2 — money now / free money */
+.finance-v2-money-now{overflow:hidden}
+.finance-v2-money-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px}
+.finance-v2-money-stat{display:grid;gap:4px;padding:11px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
+.finance-v2-money-stat span{font-size:.78rem;color:var(--muted)}
+.finance-v2-money-stat strong{font-size:1.05rem}
+.finance-v2-money-stat.free{grid-column:1/-1;border-color:rgba(139,92,246,.42);background:rgba(139,92,246,.10);padding:14px}
+.finance-v2-money-stat.free span{text-transform:uppercase;letter-spacing:.08em;font-weight:850}
+.finance-v2-money-stat.free strong{font-size:clamp(1.7rem,7vw,2.5rem);letter-spacing:-.035em}
+.finance-v2-money-now.negative .finance-v2-money-stat.free{border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.08)}
+.finance-v2-free-warning,.finance-v2-coverage{padding:9px 11px;border-radius:12px;font-size:.82rem;font-weight:750;margin:0 0 12px}
+.finance-v2-free-warning,.finance-v2-coverage.short{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.28)}
+.finance-v2-coverage.covered{background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.22)}
+.finance-v2-today-free strong{font-size:1.08rem}
+@media(max-width:380px){.finance-v2-money-grid{grid-template-columns:1fr}.finance-v2-money-stat.free{grid-column:auto}}

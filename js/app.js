@@ -690,6 +690,12 @@ function getFinanceAccountBalance(accountId) {
 function getFinanceTotalBalance() {
   return TSBFinanceCore.getTotalBalance(getFinanceStateV2());
 }
+function getFinanceFreeMoney() {
+  return TSBFinanceCore.getFreeMoney(getFinanceStateV2(), { fromDate: toISODate(new Date()) });
+}
+function getFinanceCoverage() {
+  return TSBFinanceCore.getObligationCoverage(getFinanceStateV2(), { fromDate: toISODate(new Date()) });
+}
 function getFinanceTransactions(filters = {}) {
   return TSBFinanceCore.getTransactions(getFinanceStateV2(), filters);
 }
@@ -926,21 +932,12 @@ function getLocalInsights(iso = state.selectedDate) {
   const progress = getProgress(iso);
   const finance = getFinance(iso);
   const financeSummary = getFinanceSummary(iso);
-  const context = getFinanceContext();
-  const balance = getFinanceTotalBalance();
   const selectedIsFuture = iso > todayISO;
   const selectedIsTodayOrPast = iso <= todayISO;
   const pendingTasks = tasks.filter(task => !task.done && !task.failed && !task.dismissed).length;
   const impulseCount = finance.expenses.filter(item => ['impulse', 'stress', 'tired', 'lazy', 'reward'].includes(item.reason)).length;
-  const upcomingObligations = getUpcomingPlanItems(context.obligations, 10);
-  const weekObligations = upcomingObligations.filter(item => !item.date || item.date <= addDays(todayISO, 7));
-  const weekObligationTotal = weekObligations.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const upcomingIncomes = getUpcomingPlanItems(context.incomes, 10);
-  const weekIncomes = upcomingIncomes.filter(item => !item.date || item.date <= addDays(todayISO, 7));
-  const weekIncomeTotal = weekIncomes.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const nextIncome = getNextIncome();
+  const financeCoverage = getFinanceCoverage();
   const week = getWeekDataSummary(iso);
-  const netAfterPlans = balance + weekIncomeTotal - weekObligationTotal;
 
 
   if (week.totalTasks >= 5) {
@@ -980,6 +977,10 @@ function getLocalInsights(iso = state.selectedDate) {
 
   if (week.activeImportant > 0) {
     insights.push({ tone: 'soft', title: 'На неделе есть важные даты', text: `Активных важных дат на этой неделе: ${week.activeImportant}. Их стоит учесть в задачах и деньгах.` });
+  }
+
+  if (!financeCoverage.covered) {
+    insights.push({ tone: 'warn', title: 'Назначено больше денег, чем сейчас есть', text: `Свободно ${formatRub(financeCoverage.free)}. Не хватает ${formatRub(financeCoverage.shortfall)} с учётом резервов и обязательных платежей.` });
   }
 
   const weekWeightISO = getWeeklyWeightISO(iso);
@@ -1212,8 +1213,7 @@ function renderToday() {
   const progress = getProgress();
   const important = getImportantPreview(3);
   const financeSummary = getFinanceSummary();
-  const financeAccount = getDefaultFinanceAccount();
-  const financeAccountBalance = financeAccount ? getFinanceAccountBalance(financeAccount.id) : 0;
+  const financeFreeMoney = getFinanceFreeMoney();
   const gptPlan = getGptPlan();
   const pastTasks = app.settings.showOverdueOnToday ? getPendingPastTasksHTML() : '';
   const windowDays = Number(app.settings.pastTasksWindowDays || 14);
@@ -1243,7 +1243,7 @@ function renderToday() {
       </div>
       <div class="card today-input-card today-finance-card">
         <div class="card-title-row"><h2>Финансы дня</h2><button class="ghost-button small" data-tab-target="finance">Финансы</button></div>
-        <div class="finance-summary-line">${financeAccount ? `${escapeHTML(financeAccount.name)}: ${formatRub(financeAccountBalance)}` : 'Счёт не создан'}</div>
+        <div class="finance-summary-line finance-v2-today-free">Свободно: <strong>${formatRub(financeFreeMoney)}</strong></div>
         ${renderFinanceQuickForm('today')}
         <div class="finance-summary-line">Потрачено за день: ${formatRub(financeSummary.total)} · еда: ${formatRub(financeSummary.food)} · транспорт: ${formatRub(financeSummary.transport)} · другое: ${formatRub(financeSummary.other)}</div>
         ${renderFinanceNoExpensesButton(state.selectedDate)}
@@ -1492,6 +1492,21 @@ async function openFinanceV2TransferDialog() {
   if (!mutation.ok && mutation.error==='TRANSFER_FIELDS') { showToast('Выбери разные счета'); return; }
   applyFinanceMutation(mutation,'Перевод добавлен');
 }
+function renderFinanceMoneyNowCard() {
+  const coverage=getFinanceCoverage();
+  const warning=coverage.free<0?`<div class="finance-v2-free-warning">⚠ Назначено больше денег, чем сейчас есть · не хватает ${formatRub(coverage.shortfall)}</div>`:'';
+  return `<section class="card finance-v2-money-now ${coverage.free<0?'negative':''}">
+    <div class="card-title-row"><div><h2>Деньги сейчас</h2><p class="muted">Счета минус резервы и ACTIVE платежи на ${TSBFinanceCore.UPCOMING_OBLIGATION_DAYS} дней.</p></div></div>
+    <div class="finance-v2-money-grid">
+      <div class="finance-v2-money-stat"><span>Всего на счетах</span><strong>${formatRub(coverage.totalAccounts)}</strong></div>
+      <div class="finance-v2-money-stat"><span>В резервах</span><strong>${formatRub(coverage.reserved)}</strong></div>
+      <div class="finance-v2-money-stat"><span>Обязательное скоро</span><strong>${formatRub(coverage.upcoming)}</strong></div>
+      <div class="finance-v2-money-stat free"><span>Свободно</span><strong>${formatRub(coverage.free)}</strong></div>
+    </div>${warning}
+    <div class="finance-v2-primary-actions"><button class="primary-button" type="button" data-finance-v2-income-add>+ Поступление</button><button class="ghost-button" type="button" data-finance-v2-transfer-add>Перевод</button></div>
+  </section>`;
+}
+
 function getFinanceActiveReserves() {
   return TSBFinanceCore.getActiveReserves(getFinanceStateV2());
 }
@@ -1592,8 +1607,10 @@ function renderFinanceObligationCard(obligation,{compact=false}={}) {
   </article>`;
 }
 function renderFinanceObligationsCompact() {
-  const upcoming=getFinanceUpcomingObligations(); const preview=upcoming.slice(0,3);
+  const upcoming=getFinanceUpcomingObligations(); const preview=upcoming.slice(0,3); const coverage=getFinanceCoverage();
+  const coverageText=coverage.covered?'✓ Ближайшие платежи покрыты':`⚠ Не хватает ${formatRub(coverage.shortfall)}`;
   return `<section class="card finance-v2-obligations-card"><div class="card-title-row"><div><h2>Ближайшие платежи</h2><p class="muted">ACTIVE обязательства на ближайшие ${TSBFinanceCore.UPCOMING_OBLIGATION_DAYS} дней.</p></div><span class="badge important">${formatRub(getFinanceUpcomingTotal())}</span></div>
+    <div class="finance-v2-coverage ${coverage.covered?'covered':'short'}">${coverageText}</div>
     <div class="finance-v2-obligation-list">${preview.length?preview.map(item=>renderFinanceObligationCard(item,{compact:true})).join(''):'<div class="empty">Ближайших обязательных платежей нет.</div>'}</div>
     <div class="finance-v2-section-actions"><button class="ghost-button" type="button" data-finance-obligations-open>Все платежи</button><button class="primary-button" type="button" data-finance-obligation-create>+ Добавить</button></div>
   </section>`;
@@ -1758,11 +1775,7 @@ function renderFinance() {
   const accounts = getFinanceAccounts();
   const recent = getFinanceTransactions().slice(0, 8);
   root.innerHTML = `
-    <section class="card finance-v2-hero">
-      <div class="card-title-row"><div><h2>Финансы</h2><p class="muted">Общий баланс всех активных счетов.</p></div></div>
-      <div class="finance-v2-total">${formatRub(getFinanceTotalBalance())}</div>
-      <div class="finance-v2-primary-actions"><button class="primary-button" type="button" data-finance-v2-income-add>+ Поступление</button><button class="ghost-button" type="button" data-finance-v2-transfer-add>Перевод</button></div>
-    </section>
+    ${renderFinanceMoneyNowCard()}
 
     <section class="card finance-v2-accounts-card">
       <div class="card-title-row"><div><h2>Счета</h2><p class="muted">Обычные траты идут со счёта по умолчанию.</p></div><button class="ghost-button small" type="button" data-finance-v2-account-add>+ Счёт</button></div>

@@ -131,3 +131,25 @@ test('transaction filters use the same source of truth',()=>{
   assert.deepEqual(core.getTransactions(f,{categoryId:'food'}).map(x=>x.id),['e1']);
   assert.deepEqual(core.getTransactions(f,{search:'бенз'}).map(x=>x.id),['e2']);
 });
+
+
+test('serialization keeps balances stable after reload normalization',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createAccount(f,{id:'a2',name:'Наличные'}).finance;
+  f=core.createTransaction(f,{id:'i1',type:'INCOME',amount:5000,accountId:'a1',incomeTypeId:'personal',date:'2026-08-07'}).finance;
+  f=core.createTransaction(f,{id:'e1',type:'EXPENSE',amount:700,accountId:'a1',categoryId:'food',date:'2026-08-07'}).finance;
+  f=core.createTransaction(f,{id:'t1',type:'TRANSFER',amount:1000,fromAccountId:'a1',toAccountId:'a2',date:'2026-08-07'}).finance;
+  const before=[core.getAccountBalance(f,'a1'),core.getAccountBalance(f,'a2'),core.getTotalBalance(f)];
+  const afterReload=core.normalizeFinance(JSON.parse(JSON.stringify(f)));
+  assert.deepEqual([core.getAccountBalance(afterReload,'a1'),core.getAccountBalance(afterReload,'a2'),core.getTotalBalance(afterReload)],before);
+});
+
+test('non-empty account cannot be archived and total balance stays intact',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createAccount(f,{id:'a2',name:'Наличные'}).finance;
+  f=core.createTransaction(f,{id:'i1',type:'INCOME',amount:100,accountId:'a2',incomeTypeId:'other',date:'2026-08-07'}).finance;
+  const result=core.archiveAccount(f,'a2');
+  assert.equal(result.ok,false);assert.equal(result.error,'ACCOUNT_NOT_EMPTY');assert.equal(core.getTotalBalance(result.finance),100);
+});

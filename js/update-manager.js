@@ -1,7 +1,7 @@
-// TSB Hub v0.10.8-modal-actions — single PWA update authority.
+// TSB Hub v0.11.0-finance-v2-part1 — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.10.8-modal-actions-20260807';
+  const RELEASE='0.11.0-finance-v2-part1-20260807';
   const VERSION_URL='./version.json';
   const RELOAD_KEY='tsb_hub_reload_'+RELEASE;
   const nativeRegister='serviceWorker' in navigator?navigator.serviceWorker.register.bind(navigator.serviceWorker):null;

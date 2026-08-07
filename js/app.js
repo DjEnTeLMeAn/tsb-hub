@@ -1,4 +1,4 @@
-const APP_VERSION = '0.8.21-dev';
+const APP_VERSION = '0.11.0-finance-v2-part1';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -1433,7 +1433,7 @@ async function archiveFinanceV2Account(accountId) {
   const account = getFinanceStateV2().accounts.find(item => item.id === accountId); if (!account) return;
   const ok = await openConfirmDialog({ title: 'Архивировать счёт?', message: `${account.name}. Операции сохранятся в истории.`, confirmText: 'Подтвердить', danger: true });
   if (!ok) return;
-  applyFinanceMutation(TSBFinanceCore.archiveAccount(getFinanceStateV2(), accountId), 'Счёт архивирован');
+  const mutation = TSBFinanceCore.archiveAccount(getFinanceStateV2(), accountId); if (!mutation.ok && mutation.error === 'ACCOUNT_NOT_EMPTY') { showToast('Сначала переведи деньги с этого счёта'); return; } applyFinanceMutation(mutation, 'Счёт архивирован');
 }
 async function openFinanceV2IncomeDialog() {
   const account = getDefaultFinanceAccount(); if (!account) return;
@@ -1475,6 +1475,78 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-v2-transfer-add]')?.addEventListener('click', openFinanceV2TransferDialog);
   root.querySelectorAll('[data-finance-v2-open]').forEach(row => row.onclick = event => { if (event.target.closest('button')) return; openFinanceV2TransactionEditor(row.dataset.financeV2Open); });
   root.querySelector('[data-finance-v2-history-open]')?.addEventListener('click', () => { state.financeHistoryOpen = true; renderFinance(); });
+}
+
+function ensureFinanceHistoryState() {
+  if (!state.financeHistory || typeof state.financeHistory !== 'object') {
+    state.financeHistory = { type:'ALL', period:'month', categoryId:'', search:'', dateFrom:'', dateTo:'' };
+  }
+  return state.financeHistory;
+}
+function financeHistoryRange(period) {
+  const today = toISODate(new Date());
+  const current = fromISODate(today);
+  if (period === 'today') return { dateFrom:today, dateTo:today };
+  if (period === '7d') return { dateFrom:addDays(today,-6), dateTo:today };
+  if (period === '3m') {
+    const start = new Date(current.getFullYear(), current.getMonth()-2, 1);
+    return { dateFrom:toISODate(start), dateTo:today };
+  }
+  if (period === 'custom') {
+    const h = ensureFinanceHistoryState();
+    return { dateFrom:normalizeDateInput(h.dateFrom)||'', dateTo:normalizeDateInput(h.dateTo)||'' };
+  }
+  const start = new Date(current.getFullYear(), current.getMonth(), 1);
+  const end = new Date(current.getFullYear(), current.getMonth()+1, 0);
+  return { dateFrom:toISODate(start), dateTo:toISODate(end) };
+}
+function financeHistoryTransactions() {
+  const h = ensureFinanceHistoryState();
+  const range = financeHistoryRange(h.period);
+  return getFinanceTransactions({ type:h.type, categoryId:h.categoryId, search:h.search, ...range });
+}
+function financeHistoryDateLabel(iso) {
+  return fromISODate(iso).toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+}
+function financeHistorySummaryHTML(rows) {
+  const expenses=rows.filter(x=>x.type==='EXPENSE'); const incomes=rows.filter(x=>x.type==='INCOME'); const transfers=rows.filter(x=>x.type==='TRANSFER');
+  const expenseSum=expenses.reduce((s,x)=>s+moneyNumber(x.amount),0); const incomeSum=incomes.reduce((s,x)=>s+moneyNumber(x.amount),0); const transferSum=transfers.reduce((s,x)=>s+moneyNumber(x.amount),0);
+  const h=ensureFinanceHistoryState();
+  let title='Операции'; let value=`${rows.length}`; let note=`${rows.length} операций`;
+  if(h.type==='EXPENSE'||h.categoryId){title=h.categoryId ? getFinanceCategoryLabel(h.categoryId) : 'Расходы';value=formatRub(expenseSum);note=`${expenses.length} операций`}
+  else if(h.type==='INCOME'){title='Поступления';value=formatRub(incomeSum);note=`${incomes.length} операций`}
+  else if(h.type==='TRANSFER'){title='Переводы';value=formatRub(transferSum);note=`${transfers.length} операций`}
+  else{title='Итог по фильтру';value=`−${formatRub(expenseSum)} · +${formatRub(incomeSum)}`;note=`${rows.length} операций`}
+  return `<div class="finance-v2-filter-summary"><div class="muted">${escapeHTML(title)}</div><div class="finance-v2-filter-total">${value}</div><div class="muted">${escapeHTML(note)}</div></div>`;
+}
+function financeHistoryGroupsHTML(rows) {
+  if(!rows.length)return '<div class="empty">По выбранному фильтру операций нет.</div>';
+  const groups={}; rows.forEach(transaction=>{(groups[transaction.date] ||= []).push(transaction)});
+  return Object.entries(groups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date,list])=>`<section class="finance-v2-history-day"><h3>${escapeHTML(financeHistoryDateLabel(date))}</h3><div class="finance-list">${list.map(transaction=>renderFinanceV2TransactionRow(transaction,{compact:false})).join('')}</div></section>`).join('');
+}
+function renderFinanceHistoryV2(root = $('#tab-finance')) {
+  if(!root)return;
+  const h=ensureFinanceHistoryState(); const rows=financeHistoryTransactions();
+  const typeButtons=[['ALL','Все'],['EXPENSE','Расходы'],['INCOME','Поступления'],['TRANSFER','Переводы']].map(([value,label])=>`<button class="ghost-button small ${h.type===value?'active':''}" type="button" data-finance-history-type="${value}">${label}</button>`).join('');
+  const periodButtons=[['today','Сегодня'],['7d','7 дней'],['month','Месяц'],['3m','3 месяца'],['custom','Свой период']].map(([value,label])=>`<button class="ghost-button small ${h.period===value?'active':''}" type="button" data-finance-history-period="${value}">${label}</button>`).join('');
+  const categories=[{value:'',label:'Все категории'},...getFinanceStateV2().categories.filter(x=>x.active&&!x.archived).map(x=>({value:x.id,label:x.name}))];
+  root.innerHTML=`
+    <section class="card finance-v2-history-head"><div class="card-title-row"><div><h2>История операций</h2><p class="muted">Одна база расходов, поступлений и переводов.</p></div><button class="ghost-button small" type="button" data-finance-history-back>Назад</button></div>
+      <div class="finance-v2-filter-row">${typeButtons}</div><div class="finance-v2-filter-row">${periodButtons}</div>
+      ${h.period==='custom'?`<div class="finance-v2-custom-period"><label>От<input type="date" data-finance-history-from value="${escapeHTML(h.dateFrom||'')}"></label><label>До<input type="date" data-finance-history-to value="${escapeHTML(h.dateTo||'')}"></label></div>`:''}
+      <form class="finance-v2-history-search" data-finance-history-search-form><select name="categoryId">${financeOptionHTML(categories,h.categoryId)}</select><input name="search" value="${escapeHTML(h.search||'')}" placeholder="Поиск по описанию"><button class="ghost-button" type="submit">Найти</button></form>
+      ${financeHistorySummaryHTML(rows)}
+    </section>
+    <div class="finance-v2-history-groups">${financeHistoryGroupsHTML(rows)}</div>`;
+  bindFinanceV2Screen(root); bindFinanceHistoryV2(root);
+}
+function bindFinanceHistoryV2(root) {
+  root.querySelector('[data-finance-history-back]')?.addEventListener('click',()=>{state.financeHistoryOpen=false;renderFinance()});
+  root.querySelectorAll('[data-finance-history-type]').forEach(button=>button.onclick=()=>{ensureFinanceHistoryState().type=button.dataset.financeHistoryType;renderFinance()});
+  root.querySelectorAll('[data-finance-history-period]').forEach(button=>button.onclick=()=>{ensureFinanceHistoryState().period=button.dataset.financeHistoryPeriod;renderFinance()});
+  root.querySelector('[data-finance-history-from]')?.addEventListener('change',event=>{ensureFinanceHistoryState().dateFrom=event.target.value;renderFinance()});
+  root.querySelector('[data-finance-history-to]')?.addEventListener('change',event=>{ensureFinanceHistoryState().dateTo=event.target.value;renderFinance()});
+  root.querySelector('[data-finance-history-search-form]')?.addEventListener('submit',event=>{event.preventDefault();const fd=new FormData(event.currentTarget);const h=ensureFinanceHistoryState();h.categoryId=String(fd.get('categoryId')||'');h.search=String(fd.get('search')||'').trim();renderFinance()});
 }
 
 function renderFinance() {

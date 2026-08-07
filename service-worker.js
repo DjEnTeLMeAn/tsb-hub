@@ -1,4 +1,4 @@
-const RELEASE='0.10.8-modal-actions-20260807';
+const RELEASE='0.11.0-finance-v2-part1-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,
@@ -9,10 +9,10 @@ const APP_SHELL=[
   `./css/mobile-finance.css?v=${RELEASE}`,
   `./css/confirm-dialog.css?v=${RELEASE}`,
   `./js/update-manager.js?v=${RELEASE}`,
+  `./js/finance-core.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,
-  `./js/finance-module-v1.js?v=${RELEASE}`,
   `./icons/icon-192.png?v=${RELEASE}`,
   `./icons/icon-512.png?v=${RELEASE}`
 ];

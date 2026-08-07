@@ -11,3 +11,12 @@ console.log('Static app build check passed');
 assert.equal(index.includes('finance-module-v1.js'),false,'Finance v1 override must not be loaded');
 assert.ok(app.includes('function renderFinanceV2AccountCard'),'Finance v2 accounts UI missing');
 assert.ok(app.includes('Последние операции'),'Finance v2 recent operations missing');
+
+assert.ok(app.includes('function renderFinanceHistoryV2'),'unified history missing');
+assert.ok(app.includes("const APP_VERSION = '0.11.0-finance-v2-part1'"),'app version mismatch');
+assert.equal(index.includes('finance-module-v1.js'),false,'legacy finance module reference remains');
+assert.ok(index.includes('0.11.0-finance-v2-part1-20260807'),'release shell mismatch');
+const sw=fs.readFileSync('service-worker.js','utf8');
+assert.ok(sw.includes('js/finance-core.js'),'service worker must cache finance core');
+assert.equal(sw.includes('finance-module-v1.js'),false,'service worker still references Finance v1');
+assert.equal(fs.existsSync('js/finance-module-v1.js'),false,'Finance v1 file must be removed');

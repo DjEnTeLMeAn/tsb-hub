@@ -21,3 +21,18 @@
 .finance-v2-chevron{font-size:1.6rem;opacity:.45;align-self:center}
 .finance-v2-history-button{width:100%;margin-top:12px}
 @media(max-width:560px){.finance-v2-primary-actions{grid-template-columns:1fr 1fr}.finance-v2-account{align-items:flex-start}.finance-v2-account .actions{flex-shrink:0}}
+
+
+/* Finance v2 Part 1 — unified history */
+.finance-v2-filter-row{display:flex;gap:7px;overflow-x:auto;padding:3px 0 6px;scrollbar-width:none}
+.finance-v2-filter-row::-webkit-scrollbar{display:none}
+.finance-v2-filter-row .active{border-color:rgba(139,92,246,.55);background:rgba(139,92,246,.14)}
+.finance-v2-history-search{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(140px,1.2fr) auto;gap:8px;margin-top:10px}
+.finance-v2-history-search select,.finance-v2-history-search input{min-width:0}
+.finance-v2-custom-period{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.finance-v2-custom-period label{display:grid;gap:5px;font-size:.78rem;color:var(--muted)}
+.finance-v2-filter-summary{padding:14px;margin-top:12px;border:1px solid rgba(139,92,246,.24);border-radius:16px;background:rgba(139,92,246,.055)}
+.finance-v2-filter-total{font-size:1.35rem;font-weight:900;margin:4px 0}
+.finance-v2-history-groups{display:grid;gap:12px;margin-top:12px}
+.finance-v2-history-day>h3{font-size:.9rem;color:var(--muted);margin:0 0 7px 5px;text-transform:none;font-weight:750}
+@media(max-width:600px){.finance-v2-history-search{grid-template-columns:1fr 1fr}.finance-v2-history-search button{grid-column:1/-1}.finance-v2-custom-period{grid-template-columns:1fr 1fr}}

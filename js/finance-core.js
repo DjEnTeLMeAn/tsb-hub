@@ -304,7 +304,7 @@
   }
   function getTotalBalance(finance){
     const state=normalizeFinance(finance);
-    return roundMoney(state.accounts.filter(account=>!account.archived).reduce((sum,account)=>sum+getAccountBalance(state,account.id),0));
+    return roundMoney(state.accounts.reduce((sum,account)=>sum+getAccountBalance(state,account.id),0));
   }
   function isSystemLocked(transaction){return transaction?.type===TYPES.ADJUSTMENT&&transaction?.systemKind===SYSTEM_KINDS.MIGRATION_ANCHOR}
   function transactionSortKey(transaction){return `${transaction?.date||''}T${transaction?.time||'00:00'}|${transaction?.updatedAt||transaction?.createdAt||''}`}
@@ -387,6 +387,7 @@
     const account=state.accounts.find(item=>item.id===id);
     if(!account)return {ok:false,error:'NOT_FOUND',finance:state};
     if(state.accounts.filter(item=>!item.archived&&item.active).length<=1)return {ok:false,error:'LAST_ACTIVE_ACCOUNT',finance:state};
+    if(Math.abs(getAccountBalance(state,id))>=0.005)return {ok:false,error:'ACCOUNT_NOT_EMPTY',finance:state};
     return updateAccount(state,id,{archived:true,active:false,isDefault:false},{now});
   }
   function upsertNamedCollection(finance,key,draft,{now=nowISO(),idFactory=makeId}={}){

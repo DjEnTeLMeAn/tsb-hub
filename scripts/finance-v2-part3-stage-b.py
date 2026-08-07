@@ -103,6 +103,10 @@ css += r'''
 '''
 CSS.write_text(css)
 
+# Part2 static assertions used to require the month calculation to be duplicated in app.js.
+# Part3 centralizes those rules in finance-core.js, so the static check must verify delegation instead.
+test=test.replace("assert.ok(app.includes(\"item.type==='INCOME'\"),'month income calculation missing');\nassert.ok(app.includes(\"item.type==='EXPENSE'\"),'month expense calculation missing');\n","assert.ok(app.includes('TSBFinanceCore.getAnalyticsSummary'),'month analytics must delegate to finance core');\n",1)
+
 extra=r'''
 
 // Finance v2 Part3 analytics UI must use the core summary and keep the main card compact.

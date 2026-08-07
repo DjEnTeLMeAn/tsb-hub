@@ -57,3 +57,16 @@ assert.ok(app.includes('Всего на счетах'),'money-now total label mi
 assert.ok(app.includes('Обязательное скоро'),'money-now upcoming label missing');
 assert.ok(app.includes('Свободно: <strong>${formatRub(financeFreeMoney)}'),'Today must show free money');
 assert.ok(app.includes('data-finance-v2-expense-form'),'Today quick expense input must remain unchanged');
+
+
+// Finance v2 Part 2 main screen order and real management destinations.
+assert.ok(app.includes('function renderFinanceQuickActions'),'Finance quick actions block missing');
+assert.ok(app.includes('data-finance-v2-expense-add'),'Finance quick expense action missing');
+assert.ok(app.includes('function financeCurrentMonthStats'),'current month calculation missing');
+assert.ok(app.includes("item.type==='INCOME'"),'month income calculation missing');
+assert.ok(app.includes("item.type==='EXPENSE'"),'month expense calculation missing');
+assert.ok(app.includes('function renderFinanceManagementScreen'),'management screen missing');
+assert.ok(app.includes('function renderFinanceAccountsScreen'),'accounts must be moved to management');
+assert.ok(app.includes('function renderFinanceCategoriesScreen'),'category management screen missing');
+assert.ok(app.includes('data-finance-analytics-open'),'analytics/history destination missing');
+assert.ok(app.includes('Сверка баланса'),'reconciliation status row missing');

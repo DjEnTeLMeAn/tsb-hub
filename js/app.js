@@ -1851,7 +1851,7 @@ function bindFinanceV2Screen(root) {
 
 function ensureFinanceHistoryState() {
   if (!state.financeHistory || typeof state.financeHistory !== 'object') {
-    state.financeHistory = { type:'ALL', period:'month', categoryId:'', search:'', dateFrom:'', dateTo:'' };
+    state.financeHistory = { type:'ALL', period:'month', categoryId:'', accountId:'', search:'', dateFrom:'', dateTo:'' };
   }
   return state.financeHistory;
 }
@@ -1864,6 +1864,7 @@ function financeHistoryRange(period) {
     const start = new Date(current.getFullYear(), current.getMonth()-2, 1);
     return { dateFrom:toISODate(start), dateTo:today };
   }
+  if (period === 'year') return { dateFrom:`${current.getFullYear()}-01-01`, dateTo:today };
   if (period === 'custom') {
     const h = ensureFinanceHistoryState();
     return { dateFrom:normalizeDateInput(h.dateFrom)||'', dateTo:normalizeDateInput(h.dateTo)||'' };
@@ -1875,21 +1876,15 @@ function financeHistoryRange(period) {
 function financeHistoryTransactions() {
   const h = ensureFinanceHistoryState();
   const range = financeHistoryRange(h.period);
-  return getFinanceTransactions({ type:h.type, categoryId:h.categoryId, search:h.search, ...range });
+  return getFinanceTransactions({ type:h.type, categoryId:h.categoryId, accountId:h.accountId, search:h.search, ...range });
 }
 function financeHistoryDateLabel(iso) {
   return fromISODate(iso).toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
 }
 function financeHistorySummaryHTML(rows) {
-  const expenses=rows.filter(x=>x.type==='EXPENSE'); const incomes=rows.filter(x=>x.type==='INCOME'); const transfers=rows.filter(x=>x.type==='TRANSFER');
-  const expenseSum=expenses.reduce((s,x)=>s+moneyNumber(x.amount),0); const incomeSum=incomes.reduce((s,x)=>s+moneyNumber(x.amount),0); const transferSum=transfers.reduce((s,x)=>s+moneyNumber(x.amount),0);
-  const h=ensureFinanceHistoryState();
-  let title='Операции'; let value=`${rows.length}`; let note=`${rows.length} операций`;
-  if(h.type==='EXPENSE'||h.categoryId){title=h.categoryId ? getFinanceCategoryLabel(h.categoryId) : 'Расходы';value=formatRub(expenseSum);note=`${expenses.length} операций`}
-  else if(h.type==='INCOME'){title='Поступления';value=formatRub(incomeSum);note=`${incomes.length} операций`}
-  else if(h.type==='TRANSFER'){title='Переводы';value=formatRub(transferSum);note=`${transfers.length} операций`}
-  else{title='Итог по фильтру';value=`−${formatRub(expenseSum)} · +${formatRub(incomeSum)}`;note=`${rows.length} операций`}
-  return `<div class="finance-v2-filter-summary"><div class="muted">${escapeHTML(title)}</div><div class="finance-v2-filter-total">${value}</div><div class="muted">${escapeHTML(note)}</div></div>`;
+  const expenses=rows.filter(x=>x.type==='EXPENSE');const incomes=rows.filter(x=>x.type==='INCOME');
+  const expense=incomes.length>=0?expenses.reduce((s,x)=>s+moneyNumber(x.amount),0):0;const income=incomes.reduce((s,x)=>s+moneyNumber(x.amount),0);const difference=income-expense;
+  return `<div class="finance-v2-history-summary-grid"><div><span>Поступления</span><strong>${formatRub(income)}</strong></div><div><span>Расходы</span><strong>${formatRub(expense)}</strong></div><div><span>Разница</span><strong>${difference>0?'+':''}${formatRub(difference)}</strong></div><div><span>Операций</span><strong>${rows.length}</strong></div></div><p class="muted finance-v2-history-summary-note">TRANSFER и ADJUSTMENT не считаются доходом или расходом.</p>`;
 }
 function financeHistoryGroupsHTML(rows) {
   if(!rows.length)return '<div class="empty">По выбранному фильтру операций нет.</div>';
@@ -1898,16 +1893,18 @@ function financeHistoryGroupsHTML(rows) {
 }
 function renderFinanceHistoryV2(root = $('#tab-finance')) {
   if(!root)return;
-  const h=ensureFinanceHistoryState(); const rows=financeHistoryTransactions();
-  const typeButtons=[['ALL','Все'],['EXPENSE','Расходы'],['INCOME','Поступления'],['TRANSFER','Переводы']].map(([value,label])=>`<button class="ghost-button small ${h.type===value?'active':''}" type="button" data-finance-history-type="${value}">${label}</button>`).join('');
-  const periodButtons=[['today','Сегодня'],['7d','7 дней'],['month','Месяц'],['3m','3 месяца'],['custom','Свой период']].map(([value,label])=>`<button class="ghost-button small ${h.period===value?'active':''}" type="button" data-finance-history-period="${value}">${label}</button>`).join('');
-  const categories=[{value:'',label:'Все категории'},...getFinanceStateV2().categories.filter(x=>x.active&&!x.archived).map(x=>({value:x.id,label:x.name}))];
+  const h=ensureFinanceHistoryState(); const rows=financeHistoryTransactions();const finance=getFinanceStateV2();
+  const typeButtons=[['ALL','Все'],['EXPENSE','Расходы'],['INCOME','Поступления'],['TRANSFER','Переводы'],['ADJUSTMENT','Корректировки']].map(([value,label])=>`<button class="ghost-button small ${h.type===value?'active':''}" type="button" data-finance-history-type="${value}">${label}</button>`).join('');
+  const periodButtons=[['today','Сегодня'],['7d','7 дней'],['month','Месяц'],['3m','3 месяца'],['year','Год'],['custom','Свой период']].map(([value,label])=>`<button class="ghost-button small ${h.period===value?'active':''}" type="button" data-finance-history-period="${value}">${label}</button>`).join('');
+  const categories=[{value:'',label:'Все категории'},...finance.categories.filter(x=>x.active&&!x.archived).map(x=>({value:x.id,label:x.name}))];
+  const accounts=[{value:'',label:'Все счета'},...finance.accounts.map(x=>({value:x.id,label:`${x.name}${x.archived?' · архив':''}`}))];
   root.innerHTML=`
-    <section class="card finance-v2-history-head"><div class="card-title-row"><div><h2>История операций</h2><p class="muted">Одна база расходов, поступлений и переводов.</p></div><button class="ghost-button small" type="button" data-finance-history-back>Назад</button></div>
+    <section class="card finance-v2-history-head"><div class="card-title-row"><div><h2>История операций</h2><p class="muted">Фильтры и сводка читают ту же единую базу transactions[].</p></div><button class="ghost-button small" type="button" data-finance-history-back>Назад</button></div>
       <div class="finance-v2-filter-row">${typeButtons}</div><div class="finance-v2-filter-row">${periodButtons}</div>
       ${h.period==='custom'?`<div class="finance-v2-custom-period"><label>От<input type="date" data-finance-history-from value="${escapeHTML(h.dateFrom||'')}"></label><label>До<input type="date" data-finance-history-to value="${escapeHTML(h.dateTo||'')}"></label></div>`:''}
-      <form class="finance-v2-history-search" data-finance-history-search-form><select name="categoryId">${financeOptionHTML(categories,h.categoryId)}</select><input name="search" value="${escapeHTML(h.search||'')}" placeholder="Поиск по описанию"><button class="ghost-button" type="submit">Найти</button></form>
+      <form class="finance-v2-history-search" data-finance-history-search-form><select name="accountId">${financeOptionHTML(accounts,h.accountId)}</select><select name="categoryId">${financeOptionHTML(categories,h.categoryId)}</select><input name="search" value="${escapeHTML(h.search||'')}" placeholder="Поиск по описанию"><button class="ghost-button" type="submit">Применить</button></form>
       ${financeHistorySummaryHTML(rows)}
+      <button class="ghost-button finance-v2-details-button" type="button" data-finance-history-export>CSV этой выборки</button>
     </section>
     <div class="finance-v2-history-groups">${financeHistoryGroupsHTML(rows)}</div>`;
   bindFinanceV2Screen(root); bindFinanceHistoryV2(root);
@@ -1918,7 +1915,8 @@ function bindFinanceHistoryV2(root) {
   root.querySelectorAll('[data-finance-history-period]').forEach(button=>button.onclick=()=>{ensureFinanceHistoryState().period=button.dataset.financeHistoryPeriod;renderFinance()});
   root.querySelector('[data-finance-history-from]')?.addEventListener('change',event=>{ensureFinanceHistoryState().dateFrom=event.target.value;renderFinance()});
   root.querySelector('[data-finance-history-to]')?.addEventListener('change',event=>{ensureFinanceHistoryState().dateTo=event.target.value;renderFinance()});
-  root.querySelector('[data-finance-history-search-form]')?.addEventListener('submit',event=>{event.preventDefault();const fd=new FormData(event.currentTarget);const h=ensureFinanceHistoryState();h.categoryId=String(fd.get('categoryId')||'');h.search=String(fd.get('search')||'').trim();renderFinance()});
+  root.querySelector('[data-finance-history-search-form]')?.addEventListener('submit',event=>{event.preventDefault();const fd=new FormData(event.currentTarget);const h=ensureFinanceHistoryState();h.accountId=String(fd.get('accountId')||'');h.categoryId=String(fd.get('categoryId')||'');h.search=String(fd.get('search')||'').trim();renderFinance()});
+  root.querySelector('[data-finance-history-export]')?.addEventListener('click',()=>exportFinanceCsv(financeHistoryTransactions(),'history-filtered'));
 }
 
 function renderFinance() {

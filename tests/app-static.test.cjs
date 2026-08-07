@@ -120,3 +120,12 @@ assert.ok(app.includes('function renderFinanceExportScreen'),'Finance export scr
 assert.ok(app.includes('data-finance-management-open="export"'),'Finance export management entry missing');
 assert.ok(app.includes('Полный backup TSB Hub'),'full backup bridge missing');
 assert.ok(app.includes('financeSchemaVersion:finance.schemaVersion'),'Finance export schema marker missing');
+
+
+// Finance v2 Part3 history is an analysis tool, not a second ledger.
+assert.ok(app.includes("['year','Год']"),'history year period missing');
+assert.ok(app.includes("['ADJUSTMENT','Корректировки']"),'history adjustment filter missing');
+assert.ok(app.includes("accountId:h.accountId"),'history account filter must use core transactions filter');
+assert.ok(app.includes('finance-v2-history-summary-grid'),'history analysis summary missing');
+assert.ok(app.includes('data-finance-history-export'),'filtered history CSV export missing');
+assert.ok(app.includes("exportFinanceCsv(financeHistoryTransactions(),'history-filtered')"),'history export must use current filtered rows');

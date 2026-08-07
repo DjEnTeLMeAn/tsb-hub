@@ -133,3 +133,12 @@
 /* Finance v2 Part3 — export */
 .finance-v2-export-card{display:grid;gap:8px}
 .finance-v2-export-card p{margin:0 0 8px}
+
+
+/* Finance v2 Part3 — history analysis */
+.finance-v2-history-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.finance-v2-history-summary-grid>div{display:grid;gap:3px;padding:9px;border-radius:11px;background:rgba(255,255,255,.035)}
+.finance-v2-history-summary-grid span{font-size:.74rem;opacity:.7}
+.finance-v2-history-summary-grid strong{font-size:.94rem;overflow-wrap:anywhere}
+.finance-v2-history-summary-note{margin:7px 0 0}
+@media(max-width:600px){.finance-v2-history-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-v2-history-search{grid-template-columns:1fr}}

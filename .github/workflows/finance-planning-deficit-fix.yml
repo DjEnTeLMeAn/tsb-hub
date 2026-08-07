@@ -1,0 +1,105 @@
+name: Finance planning deficit fix
+on:
+  push:
+    paths:
+      - '.github/workflows/finance-planning-deficit-fix.yml'
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create backup branch
+        run: |
+          git branch backup-before-finance-planning-deficit-2026-08-08 HEAD || true
+          git push origin backup-before-finance-planning-deficit-2026-08-08 || true
+      - name: Patch planning logic
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('js/finance-core.js')
+          s=p.read_text()
+          old="""    const before=getFreeMoney(state,{fromDate});state.reserves.push(reserve);const after=getFreeMoney(state,{fromDate});\n    if(worsensNegative(before,after)){state.reserves.pop();return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}\n    return {ok:true,finance:state,reserve,freeMoney:after};"""
+          new="""    state.reserves.push(reserve);const after=getFreeMoney(state,{fromDate});\n    return {ok:true,finance:state,reserve,freeMoney:after,hasShortfall:after<0};"""
+          if old not in s: raise SystemExit('createReserve target not found')
+          s=s.replace(old,new,1)
+          old="""    const before=getFreeMoney(state,{fromDate});const reserve=normalizeReserve(candidate,index,now);state.reserves[index]=reserve;const after=getFreeMoney(state,{fromDate});\n    if(worsensNegative(before,after)){state.reserves[index]=current;return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}\n    return {ok:true,finance:state,reserve,freeMoney:after};"""
+          new="""    const reserve=normalizeReserve(candidate,index,now);state.reserves[index]=reserve;const after=getFreeMoney(state,{fromDate});\n    return {ok:true,finance:state,reserve,freeMoney:after,hasShortfall:after<0};"""
+          if old not in s: raise SystemExit('updateReserve target not found')
+          s=s.replace(old,new,1)
+          old="""    const before=getFreeMoney(state,{fromDate});state.obligations.push(obligation);const after=getFreeMoney(state,{fromDate});\n    if(worsensNegative(before,after)){state.obligations.pop();return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}\n    return {ok:true,finance:state,obligation,freeMoney:after};"""
+          new="""    state.obligations.push(obligation);const after=getFreeMoney(state,{fromDate});\n    return {ok:true,finance:state,obligation,freeMoney:after,hasShortfall:after<0};"""
+          if old not in s: raise SystemExit('createObligation target not found')
+          s=s.replace(old,new,1)
+          old="""    const before=getFreeMoney(state,{fromDate});const obligation=normalizeObligation({...current,...editable,id:current.id,status:current.status,linkedTransactionId:current.linkedTransactionId,updatedAt:now},index,now);state.obligations[index]=obligation;const after=getFreeMoney(state,{fromDate});\n    if(worsensNegative(before,after)){state.obligations[index]=current;return {ok:false,error:'INSUFFICIENT_FREE_MONEY',finance:state,freeMoney:before};}\n    return {ok:true,finance:state,obligation,freeMoney:after};"""
+          new="""    const obligation=normalizeObligation({...current,...editable,id:current.id,status:current.status,linkedTransactionId:current.linkedTransactionId,updatedAt:now},index,now);state.obligations[index]=obligation;const after=getFreeMoney(state,{fromDate});\n    return {ok:true,finance:state,obligation,freeMoney:after,hasShortfall:after<0};"""
+          if old not in s: raise SystemExit('updateObligation target not found')
+          s=s.replace(old,new,1)
+          # Remove now-unused helper and obsolete UI error mapping.
+          s=s.replace("  function worsensNegative(before,after){return after<0&&after<before}\n","")
+          p.write_text(s)
+
+          p=Path('js/app.js'); s=p.read_text()
+          s=s.replace("    INSUFFICIENT_FREE_MONEY: 'Недостаточно свободных денег',\n","")
+          p.write_text(s)
+          PY
+      - name: Add regression tests
+        run: |
+          cat >> tests/finance-part2-regression.test.cjs <<'EOF'
+
+          test('planning deficit is allowed for reserves and obligations', () => {
+            let finance = Core.createEmptyFinance('2026-08-08T00:00:00.000Z');
+            finance = Core.createAccount(finance,{id:'main',name:'Основной',isDefault:true},{now:'2026-08-08T00:00:00.000Z'}).finance;
+            finance = Core.createTransaction(finance,{type:'INCOME',amount:1000,accountId:'main',incomeTypeId:'other',date:'2026-08-08'},{now:'2026-08-08T00:00:00.000Z'}).finance;
+            const reserve = Core.createReserve(finance,{name:'Загранпаспорт',amount:5000},{now:'2026-08-08T00:00:00.000Z',fromDate:'2026-08-08'});
+            assert.equal(reserve.ok,true);
+            assert.equal(reserve.freeMoney,-4000);
+            assert.equal(reserve.hasShortfall,true);
+            const obligation = Core.createObligation(reserve.finance,{name:'Платёж через месяц',amount:2000,dueDate:'2026-09-07',recurrence:'MONTHLY'},{now:'2026-08-08T00:00:00.000Z',fromDate:'2026-08-08'});
+            assert.equal(obligation.ok,true);
+            assert.equal(obligation.hasShortfall,true);
+            assert.equal(obligation.obligation.recurrence,'MONTHLY');
+          });
+          EOF
+      - name: Prepare release
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          old='0.13.1-finance-mobile-fix-20260808'
+          new='0.13.2-finance-planning-deficit-20260808'
+          replacements={
+            'index.html':[(old,new),('v0.13.1','v0.13.2')],
+            'js/update-manager.js':[(old,new),('v0.13.1-finance-mobile-fix','v0.13.2-finance-planning-deficit')],
+            'service-worker.js':[(old,new)],
+            'manifest.json':[(old,new)],
+            'tests/app-static.test.cjs':[(old,new),('0.13.1-finance-mobile-fix','0.13.2-finance-planning-deficit')],
+            'js/app.js':[('0.13.1-finance-mobile-fix','0.13.2-finance-planning-deficit')],
+          }
+          for file,pairs in replacements.items():
+            p=Path(file); s=p.read_text()
+            for a,b in pairs: s=s.replace(a,b)
+            p.write_text(s)
+          Path('version.json').write_text('''{\n  "release": "0.13.2-finance-planning-deficit-20260808",\n  "publishedAt": "2026-08-08T00:32:00+05:00",\n  "cache": "tsb-hub-0.13.2-finance-planning-deficit-20260808"\n}\n''')
+          PY
+      - name: Test
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add js/finance-core.js js/app.js tests/finance-part2-regression.test.cjs tests/app-static.test.cjs index.html js/update-manager.js service-worker.js manifest.json version.json
+          git commit -m 'Allow planned Finance deficits for reserves and obligations'
+          git rm .github/workflows/finance-planning-deficit-fix.yml
+          git commit -m 'Remove temporary Finance planning workflow'
+          git push origin HEAD:main

@@ -650,6 +650,42 @@
     return {ok:true,finance:normalizeFinance(state,now),transaction,obligation,nextObligation};
   }
 
+  function dateSpanDays(dateFrom,dateTo){
+    if(!validDate(dateFrom)||!validDate(dateTo)||dateTo<dateFrom)return 0;
+    const [fy,fm,fd]=dateFrom.split('-').map(Number);const [ty,tm,td]=dateTo.split('-').map(Number);
+    const start=Date.UTC(fy,fm-1,fd);const end=Date.UTC(ty,tm-1,td);
+    return Math.floor((end-start)/86400000)+1;
+  }
+  function analyticsBounds(rows,dateFrom,dateTo){
+    if(validDate(dateFrom)&&validDate(dateTo)&&dateTo>=dateFrom)return {dateFrom,dateTo,days:dateSpanDays(dateFrom,dateTo)};
+    const dates=rows.map(item=>item.date).filter(validDate).sort();
+    if(!dates.length)return {dateFrom:'',dateTo:'',days:0};
+    const from=validDate(dateFrom)?dateFrom:dates[0];const to=validDate(dateTo)?dateTo:dates[dates.length-1];
+    return {dateFrom:from,dateTo:to,days:dateSpanDays(from,to)};
+  }
+  function getAnalyticsSummary(finance,{dateFrom='',dateTo=''}={}){
+    const filters={};if(validDate(dateFrom))filters.dateFrom=dateFrom;if(validDate(dateTo))filters.dateTo=dateTo;
+    const rows=getTransactions(finance,filters);
+    const incomes=rows.filter(item=>item.type===TYPES.INCOME);
+    const expenses=rows.filter(item=>item.type===TYPES.EXPENSE);
+    const income=roundMoney(incomes.reduce((sum,item)=>sum+positiveMoney(item.amount),0));
+    const expense=roundMoney(expenses.reduce((sum,item)=>sum+positiveMoney(item.amount),0));
+    const byCategory={};
+    expenses.forEach(item=>{
+      const id=text(item.categoryId)||'other';
+      const bucket=byCategory[id]||(byCategory[id]={categoryId:id,amount:0,count:0});
+      bucket.amount=roundMoney(bucket.amount+positiveMoney(item.amount));bucket.count+=1;
+    });
+    const categoryBreakdown=Object.values(byCategory).map(item=>({...item,share:expense>0?Math.round((item.amount/expense)*1000)/10:0})).sort((a,b)=>b.amount-a.amount||a.categoryId.localeCompare(b.categoryId));
+    const bounds=analyticsBounds(rows,dateFrom,dateTo);
+    return {
+      dateFrom:bounds.dateFrom,dateTo:bounds.dateTo,days:bounds.days,
+      income,expense,difference:roundMoney(income-expense),expenseCount:expenses.length,
+      averageExpensePerDay:bounds.days?roundMoney(expense/bounds.days):0,
+      categoryBreakdown
+    };
+  }
+
   function validateTransactionShape(transaction){
     const row=normalizeTransaction(transaction);
     if(!row)return {ok:false,error:'UNKNOWN_TYPE'};
@@ -677,7 +713,7 @@
     createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,
     getActiveReserves,getTotalReservedAmount,createReserve,updateReserve,adjustReserveAmount,archiveReserve,importLegacyReserve,
     getActiveObligations,getUpcomingObligations,getUpcomingObligationsTotal,createObligation,updateObligation,cancelObligation,payObligation,linkObligationToTransaction,
-    getFreeMoney,getObligationCoverage,addDaysISO,addMonthISO,
+    getFreeMoney,getObligationCoverage,addDaysISO,addMonthISO,dateSpanDays,getAnalyticsSummary,
     createOrUpdateCategory,archiveCategory,createOrUpdateIncomeType,archiveIncomeType
   });
 });

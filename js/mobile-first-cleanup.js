@@ -1,4 +1,4 @@
-// TSB Hub 0.10.4 — exact Today summaries, stable task controls and mobile cleanup.
+// TSB Hub 0.10.5 — neutral missing expenses and compact task accept action.
 (function(){
   'use strict';
 
@@ -7,7 +7,7 @@
   const TAB_ICONS={today:'●',plans:'✓',finance:'₽',important:'!',sync:'↔',settings:'⚙'};
   const INPUT_SELECTOR='input, textarea, select, [contenteditable="true"]';
   let baselineViewportHeight=0,focusTimer=0,usageTimer=0,patchTimer=0;
-  let reportWrapped=false,stableRenderWrapped=false;
+  let reportWrapped=false,stableRenderWrapped=false,financeInsightsWrapped=false;
 
   const qs=(selector,root=document)=>root.querySelector(selector);
   const qsa=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
@@ -99,6 +99,14 @@
   }
   function wrapGptReport(){if(reportWrapped||typeof buildGptReport!=='function')return;const original=buildGptReport;buildGptReport=function(){return `${original()}${usageForWeekText()}`};reportWrapped=true}
 
+  function wrapNeutralFinanceInsights(){
+    if(financeInsightsWrapped||typeof getLocalInsights!=='function')return;
+    const original=getLocalInsights;
+    const blocked=new Set(['Финансы дня не закрыты','Есть незакрытые финансовые дни']);
+    getLocalInsights=function(){return original.apply(this,arguments).filter(item=>!blocked.has(item?.title))};
+    financeInsightsWrapped=true;
+  }
+
   function usageListHTML(){
     const usage=safeApp()?.appUsage||{},today=dateISO(),rows=[];
     for(let i=0;i<7;i+=1){const iso=addLocalDays(today,-i),u=usage[iso]||{},last=u.lastOpen?new Date(u.lastOpen).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'';rows.push(`<article class="finance-card usage-log-row"><div class="item-top"><div><div class="badge-row"><span class="badge important">${esc(short(iso))}</span><span class="badge">входов ${Number(u.openCount||0)}</span></div><h3>${esc(u.firstMorningOpen||'—')} → ${esc(u.lastNightOpen||'—')}</h3><p class="muted">утро / ночь${last?` · последний вход ${esc(last)}`:''}</p></div></div></article>`)}
@@ -120,6 +128,14 @@
 
   function patchFoodRemoval(){qsa('[data-tab="food"],[data-tab-target="food"]').forEach(el=>{el.hidden=true;el.style.display='none'});const page=qs('#tab-food');if(page)page.hidden=true;if(currentTab()==='food'&&typeof setTab==='function')setTab('today')}
   function patchTodayHeaderButtons(){const root=qs('#tab-today');if(!root)return;qsa('.card-title-row [data-tab-target="plans"],.card-title-row [data-tab-target="finance"],.card-title-row [data-tab-target="food"]',root).forEach(btn=>btn.remove());const line=qs('.today-finance-card .finance-summary-line',root);if(line&&!line.dataset.mfNoAssets){line.textContent=line.textContent.replace(/\s*·\s*активы:[^·]*/i,'');line.dataset.mfNoAssets='1'}}
+
+  function patchFinanceNoExpenseState(){
+    qsa('[data-finance-no-expenses]').forEach(button=>button.remove());
+    qsa('.finance-summary-line').forEach(line=>{if(/без трат|отметка.*трат/i.test(line.textContent||''))line.remove()});
+    let changed=false;
+    Object.values(safeApp()?.finance||{}).forEach(day=>{if(day?.noExpenses){day.noExpenses=false;changed=true}});
+    if(changed&&typeof saveData==='function')saveData(app,true);
+  }
 
   function isoFromDetails(details){return details.dataset.detailsKey?.match(/(\d{4}-\d{2}-\d{2})$/)?.[1]||selectedDate()}
   function exactTodaySummary(details){
@@ -149,10 +165,10 @@
   function patchActionButtonText(root=document){qsa('.actions button,.item-top button,.task-top button',root).forEach(btn=>{const text=btn.textContent.trim();if(text==='Изм.'||text==='Изменить'){btn.title='Изменить';btn.setAttribute('aria-label','Изменить');btn.textContent='✎';btn.classList.add('mf-icon-action')}if(text==='Удал.'||text==='Удалить'){btn.title='Удалить';btn.setAttribute('aria-label','Удалить');btn.textContent='×';btn.classList.add('mf-icon-action')}})}
 
   function taskStateBadge(card){const row=card.querySelector('.badge-row');if(!row)return null;let badge=row.querySelector('.mf-task-state-badge');if(!badge){badge=document.createElement('span');badge.className='badge mf-task-state-badge';row.appendChild(badge)}qsa('.done-badge',row).forEach(el=>{if(el!==badge)el.remove()});return badge}
-  function applyTaskState(card,task,button){card.classList.toggle('done',Boolean(task.done));const badge=taskStateBadge(card);if(badge){badge.textContent=task.done?'Выполнено':'Не выполнено';badge.classList.toggle('done-badge',Boolean(task.done));badge.classList.toggle('secondary',!task.done)}if(button){button.textContent=task.done?'Вернуть':'Принять';button.setAttribute('aria-pressed',String(Boolean(task.done)));button.classList.toggle('active',Boolean(task.done))}}
+  function applyTaskState(card,task,button){card.classList.toggle('done',Boolean(task.done));const badge=taskStateBadge(card);if(badge){badge.textContent=task.done?'Выполнено':'Не выполнено';badge.classList.toggle('done-badge',Boolean(task.done));badge.classList.toggle('secondary',!task.done)}if(button){button.textContent='✓';button.title=task.done?'Вернуть задачу в невыполненные':'Отметить задачу выполненной';button.setAttribute('aria-label',button.title);button.setAttribute('aria-pressed',String(Boolean(task.done)));button.classList.toggle('active',Boolean(task.done))}}
   function refreshTaskSummary(iso){if(typeof getProgress!=='function')return;const p=getProgress(iso);if(iso===selectedDate()){const chips=qsa('#tab-today .today-summary-compact .summary-chip');if(chips[0])chips[0].textContent=`Задачи ${p.done}/${p.total}`;if(chips[1])chips[1].textContent=`Выполнение ${p.pct}%`;const title=qs(`#tab-today details[data-details-key="today-tasks-${iso}"] .mf-summary-title`);if(title)title.textContent=`Задачи дня • ${p.total}`}}
   function toggleTask(button){const iso=button.dataset.date||selectedDate(),task=typeof findTask==='function'?findTask(iso,button.dataset.mfTaskAccept):null;if(!task)return;task.done=!task.done;if(task.done){task.failed=false;task.completedAt=task.completedAt||new Date().toISOString();task.completedForDate=iso;task.completionMode=task.completionMode||'same_day'}else{task.completedAt='';task.completedForDate='';task.completionMode=''}if(typeof saveData==='function')saveData(app,true);const card=button.closest('.task-card');if(card)applyTaskState(card,task,button);refreshTaskSummary(iso);if(typeof showToast==='function')showToast(task.done?'Задача выполнена':'Задача снова активна')}
-  function patchTaskControls(root=document){qsa('.task-card',root).forEach(card=>{const checkbox=card.querySelector('input[data-task-toggle]'),existing=card.querySelector('[data-mf-task-accept]'),id=checkbox?.dataset.taskToggle||existing?.dataset.mfTaskAccept,iso=checkbox?.dataset.date||existing?.dataset.date||selectedDate();if(!id)return;if(checkbox)checkbox.remove();const actions=card.querySelector('.actions');if(!actions)return;let button=existing;if(!button){button=document.createElement('button');button.type='button';button.className='ghost-button mf-task-accept';button.dataset.mfTaskAccept=id;button.dataset.date=iso;const edit=actions.querySelector('[data-task-edit]');edit?actions.insertBefore(button,edit):actions.prepend(button)}button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleTask(button)};const task=typeof findTask==='function'?findTask(iso,id):null;if(task)applyTaskState(card,task,button)})}
+  function patchTaskControls(root=document){qsa('.task-card',root).forEach(card=>{const checkbox=card.querySelector('input[data-task-toggle]'),existing=card.querySelector('[data-mf-task-accept]'),id=checkbox?.dataset.taskToggle||existing?.dataset.mfTaskAccept,iso=checkbox?.dataset.date||existing?.dataset.date||selectedDate();if(!id)return;if(checkbox)checkbox.remove();const actions=card.querySelector('.actions');if(!actions)return;let button=existing;if(!button){button=document.createElement('button');button.type='button';button.className='ghost-button mf-task-accept mf-icon-action';button.dataset.mfTaskAccept=id;button.dataset.date=iso;const edit=actions.querySelector('[data-task-edit]');edit?actions.insertBefore(button,edit):actions.prepend(button)}else button.classList.add('mf-icon-action');button.onclick=event=>{event.preventDefault();event.stopPropagation();toggleTask(button)};const task=typeof findTask==='function'?findTask(iso,id):null;if(task)applyTaskState(card,task,button)})}
 
   async function editTodayFinance(button){
     if(typeof openEditDialog!=='function'||typeof getFinance!=='function')return;
@@ -162,7 +178,7 @@
   }
   function patchTodayFinanceEdit(){const root=qs('#tab-today');if(!root)return;qsa('.today-finance-card .finance-card',root).forEach(card=>{const del=card.querySelector('[data-finance-delete]');if(!del)return;const id=del.dataset.financeDelete;let edit=card.querySelector(`[data-mf-finance-edit="${id}"]`);if(!edit){edit=document.createElement('button');edit.type='button';edit.className='ghost-button mf-icon-action';edit.dataset.mfFinanceEdit=id;edit.dataset.date=selectedDate();edit.title='Изменить и добавить описание';edit.setAttribute('aria-label','Изменить трату');edit.textContent='✎';del.parentElement?.insertBefore(edit,del)}edit.onclick=event=>{event.preventDefault();event.stopPropagation();editTodayFinance(edit)}})}
 
-  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();patchTodayHeaderButtons();patchCollapsibleSummaries(document);patchDailyReportLabels();patchTaskControls(document);patchTodayFinanceEdit();patchActionButtonText(document);bindWeightForms(document)}
+  function patchScreens(){patchFoodRemoval();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();patchTodayHeaderButtons();patchFinanceNoExpenseState();patchCollapsibleSummaries(document);patchDailyReportLabels();patchTaskControls(document);patchTodayFinanceEdit();patchActionButtonText(document);bindWeightForms(document)}
 
   function setupInputFocusGuard(){
     initViewportBaseline();
@@ -175,7 +191,7 @@
   }
 
   function setup(){
-    wrapStableRerenders();
+    wrapStableRerenders();wrapNeutralFinanceInsights();
     qsa('.tabs .tab-button').forEach(button=>{if(TAB_LABELS[button.dataset.tab])setButtonLabel(button,button.dataset.tab)});
     const toggle=qs('#mobileTabToggle');if(toggle){toggle.textContent='Ещё';toggle.title='Ещё разделы';toggle.setAttribute('aria-label','Ещё разделы приложения')}
     structureMenu();updateMoreState();syncKeyboardNav();wrapGptReport();scheduleUsage();schedulePatch(0);

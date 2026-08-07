@@ -1507,19 +1507,48 @@ function renderFinanceMoneyNowCard() {
 }
 
 function financeCurrentMonthStats() {
-  const now=new Date();const start=toISODate(new Date(now.getFullYear(),now.getMonth(),1));const end=toISODate(new Date(now.getFullYear(),now.getMonth()+1,0));
-  const rows=getFinanceTransactions({dateFrom:start,dateTo:end});const incomes=rows.filter(item=>item.type==='INCOME');const expenses=rows.filter(item=>item.type==='EXPENSE');
-  const income=incomes.reduce((sum,item)=>sum+moneyNumber(item.amount),0);const expense=expenses.reduce((sum,item)=>sum+moneyNumber(item.amount),0);const byCategory={};
-  expenses.forEach(item=>{byCategory[item.categoryId||'other']=(byCategory[item.categoryId||'other']||0)+moneyNumber(item.amount)});
-  const topCategories=Object.entries(byCategory).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([categoryId,amount])=>({categoryId,name:getFinanceCategoryLabel(categoryId),amount}));
-  return {label:MONTH_NAMES[now.getMonth()].toUpperCase(),income,expense,difference:income-expense,topCategories};
+  const now=new Date();const start=toISODate(new Date(now.getFullYear(),now.getMonth(),1));const end=toISODate(now);
+  const summary=TSBFinanceCore.getAnalyticsSummary(getFinanceStateV2(),{dateFrom:start,dateTo:end});
+  return {...summary,label:MONTH_NAMES[now.getMonth()].toUpperCase(),topCategories:summary.categoryBreakdown.slice(0,3).map(item=>({...item,name:getFinanceCategoryLabel(item.categoryId)}))};
 }
 function renderFinanceQuickActions() {
   return `<section class="card finance-v2-quick-actions-card"><div class="card-title-row"><h2>Быстрые действия</h2></div><div class="finance-v2-quick-actions"><button class="primary-button" type="button" data-finance-v2-income-add>+ Поступление</button><button class="ghost-button" type="button" data-finance-v2-expense-add>+ Расход</button><button class="ghost-button" type="button" data-finance-v2-transfer-add>Перевод</button><button class="ghost-button" type="button" data-finance-more>Ещё</button></div></section>`;
 }
 function renderFinanceMonthCard() {
   const stats=financeCurrentMonthStats();const diff=stats.difference;const top=stats.topCategories.length?`<div class="finance-v2-month-top">${stats.topCategories.map(item=>`<div><span>${escapeHTML(item.name)}</span><strong>${formatRub(item.amount)}</strong></div>`).join('')}</div>`:'';
-  return `<section class="card finance-v2-month-card"><div class="card-title-row"><div><h2>${stats.label}</h2><p class="muted">Только реальные поступления и расходы этого календарного месяца.</p></div></div><div class="finance-v2-month-grid"><div><span>Поступило</span><strong>${formatRub(stats.income)}</strong></div><div><span>Потрачено</span><strong>${formatRub(stats.expense)}</strong></div><div class="difference"><span>Разница</span><strong>${diff>0?'+':''}${formatRub(diff)}</strong></div></div>${top}</section>`;
+  return `<section class="card finance-v2-month-card"><div class="card-title-row"><div><h2>${stats.label}</h2><p class="muted">Только реальные INCOME и EXPENSE.</p></div></div><div class="finance-v2-month-grid"><div><span>Поступило</span><strong>${formatRub(stats.income)}</strong></div><div><span>Потрачено</span><strong>${formatRub(stats.expense)}</strong></div><div class="difference"><span>Разница</span><strong>${diff>0?'+':''}${formatRub(diff)}</strong></div></div>${top}<button class="ghost-button finance-v2-details-button" type="button" data-finance-analytics-open>Подробнее</button></section>`;
+}
+
+function ensureFinanceAnalyticsState() {
+  if(!state.financeAnalytics||typeof state.financeAnalytics!=='object')state.financeAnalytics={period:'month',dateFrom:'',dateTo:''};
+  return state.financeAnalytics;
+}
+function financeAnalyticsRange(period=ensureFinanceAnalyticsState().period) {
+  const a=ensureFinanceAnalyticsState();const today=toISODate(new Date());const now=fromISODate(today);
+  if(period==='week')return {dateFrom:getMondayISO(today),dateTo:today};
+  if(period==='3m'){const start=new Date(now.getFullYear(),now.getMonth()-2,1);return {dateFrom:toISODate(start),dateTo:today};}
+  if(period==='year')return {dateFrom:`${now.getFullYear()}-01-01`,dateTo:today};
+  if(period==='custom'){
+    const from=normalizeAnyDateKey(a.dateFrom);const to=normalizeAnyDateKey(a.dateTo);
+    if(from&&to&&from<=to)return {dateFrom:from,dateTo:to};
+  }
+  return {dateFrom:toISODate(new Date(now.getFullYear(),now.getMonth(),1)),dateTo:today};
+}
+function financeAnalyticsSummary() {
+  const range=financeAnalyticsRange();return {...TSBFinanceCore.getAnalyticsSummary(getFinanceStateV2(),range),...range};
+}
+function financeAnalyticsCategoryHTML(summary) {
+  if(!summary.categoryBreakdown.length)return '<div class="empty">Расходов за период нет.</div>';
+  return summary.categoryBreakdown.map(item=>`<div class="finance-v2-analytics-category"><div><strong>${escapeHTML(getFinanceCategoryLabel(item.categoryId))}</strong><small>${item.count} оп. · ${item.share}%</small></div><strong>${formatRub(item.amount)}</strong></div>`).join('');
+}
+function renderFinanceAnalyticsScreen(root=$('#tab-finance')) {
+  if(!root)return;const a=ensureFinanceAnalyticsState();const summary=financeAnalyticsSummary();const diff=summary.difference;
+  const buttons=[['week','Неделя'],['month','Месяц'],['3m','3 месяца'],['year','Год'],['custom','Свой период']].map(([value,label])=>`<button class="ghost-button small ${a.period===value?'active':''}" type="button" data-finance-analytics-period="${value}">${label}</button>`).join('');
+  const custom=a.period==='custom'?`<form class="finance-v2-analytics-custom" data-finance-analytics-custom><label>От<input type="date" name="dateFrom" value="${escapeHTML(a.dateFrom||summary.dateFrom)}" required></label><label>До<input type="date" name="dateTo" value="${escapeHTML(a.dateTo||summary.dateTo)}" required></label><button class="primary-button small" type="submit">Показать</button></form>`:'';
+  root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Аналитика</h2><p class="muted">Автоматически из реальных операций.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
+    <section class="card finance-v2-analytics-card"><div class="finance-v2-period-buttons">${buttons}</div>${custom}<p class="muted finance-v2-period-caption">${shortDate(summary.dateFrom)} — ${shortDate(summary.dateTo)} · ${summary.days} дн.</p><div class="finance-v2-analytics-grid"><div><span>Поступления</span><strong>${formatRub(summary.income)}</strong></div><div><span>Расходы</span><strong>${formatRub(summary.expense)}</strong></div><div><span>Разница</span><strong>${diff>0?'+':''}${formatRub(diff)}</strong></div><div><span>Расходных операций</span><strong>${summary.expenseCount}</strong></div><div><span>Среднее в день</span><strong>${formatRub(summary.averageExpensePerDay)}</strong></div></div></section>
+    <section class="card"><div class="card-title-row"><div><h2>По категориям</h2><p class="muted">Доля только от EXPENSE выбранного периода.</p></div></div><div class="finance-v2-analytics-categories">${financeAnalyticsCategoryHTML(summary)}</div><button class="ghost-button finance-v2-details-button" type="button" data-finance-analytics-history>Операции периода</button></section>`;
+  bindFinanceV2Screen(root);
 }
 async function openFinanceV2ExpenseDialog() {
   const account=getDefaultFinanceAccount();if(!account)return;
@@ -1537,7 +1566,7 @@ async function openFinanceV2ExpenseDialog() {
 function openFinanceSubscreen(name,returnTo='') {state.financeSubscreen=name;state.financeSubscreenReturn=returnTo;state.financeHistoryOpen=false;renderFinance();}
 function closeFinanceSubscreen() {const target=state.financeSubscreenReturn||'';state.financeSubscreen=target;state.financeSubscreenReturn='';renderFinance();}
 function renderFinanceManagementLinks() {
-  return `<section class="card finance-v2-navigation-card"><button class="finance-v2-nav-row" type="button" data-finance-analytics-open><span><strong>Аналитика</strong><small>История и фильтры операций</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-root><span><strong>Управление</strong><small>Счета, категории, резервы и платежи</small></span><b>›</b></button></section>`;
+  return `<section class="card finance-v2-navigation-card"><button class="finance-v2-nav-row" type="button" data-finance-analytics-open><span><strong>Аналитика</strong><small>Периоды, суммы и категории</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-root><span><strong>Управление</strong><small>Счета, категории, резервы и платежи</small></span><b>›</b></button></section>`;
 }
 function renderFinanceAccountsScreen(root=$('#tab-finance')) {
   if(!root)return;const accounts=getFinanceAccounts();root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Счета и наличные</h2><p class="muted">Баланс каждого счёта вычисляется из операций.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card finance-v2-accounts-card"><div class="card-title-row"><h2>Активные счета</h2><button class="primary-button small" type="button" data-finance-v2-account-add>+ Счёт</button></div><div class="finance-v2-accounts">${accounts.map(renderFinanceV2AccountCard).join('')||'<div class="empty">Счетов пока нет.</div>'}</div></section>`;bindFinanceV2Screen(root);
@@ -1753,7 +1782,10 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-v2-expense-add]')?.addEventListener('click',openFinanceV2ExpenseDialog);
   root.querySelector('[data-finance-more]')?.addEventListener('click',()=>openFinanceSubscreen('management'));
   root.querySelector('[data-finance-management-root]')?.addEventListener('click',()=>openFinanceSubscreen('management'));
-  root.querySelector('[data-finance-analytics-open]')?.addEventListener('click',()=>{state.financeSubscreen='';state.financeHistoryOpen=true;renderFinance();});
+  root.querySelectorAll('[data-finance-analytics-open]').forEach(button=>button.onclick=()=>openFinanceSubscreen('analytics'));
+  root.querySelectorAll('[data-finance-analytics-period]').forEach(button=>button.onclick=()=>{const a=ensureFinanceAnalyticsState();a.period=button.dataset.financeAnalyticsPeriod;renderFinance();});
+  root.querySelector('[data-finance-analytics-custom]')?.addEventListener('submit',event=>{event.preventDefault();const fd=new FormData(event.currentTarget);const a=ensureFinanceAnalyticsState();const from=String(fd.get('dateFrom')||'');const to=String(fd.get('dateTo')||'');if(!normalizeAnyDateKey(from)||!normalizeAnyDateKey(to)||from>to){showToast('Проверь период');return;}a.dateFrom=from;a.dateTo=to;a.period='custom';renderFinance();});
+  root.querySelector('[data-finance-analytics-history]')?.addEventListener('click',()=>{const range=financeAnalyticsRange();const h=ensureFinanceHistoryState();h.period='custom';h.dateFrom=range.dateFrom;h.dateTo=range.dateTo;h.type='ALL';state.financeSubscreen='';state.financeHistoryOpen=true;renderFinance();});
   root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>{const target=button.dataset.financeManagementOpen;if(target==='sync'){setTab('sync');return;}openFinanceSubscreen(target,'management');});
   root.querySelector('[data-finance-category-add]')?.addEventListener('click',()=>openFinanceCategoryDialog());
   root.querySelectorAll('[data-finance-category-edit]').forEach(button=>button.onclick=()=>openFinanceCategoryDialog(button.dataset.financeCategoryEdit));
@@ -1841,6 +1873,7 @@ function renderFinance() {
   if (state.financeSubscreen === 'management') { renderFinanceManagementScreen(root); return; }
   if (state.financeSubscreen === 'accounts') { renderFinanceAccountsScreen(root); return; }
   if (state.financeSubscreen === 'categories') { renderFinanceCategoriesScreen(root); return; }
+  if (state.financeSubscreen === 'analytics') { renderFinanceAnalyticsScreen(root); return; }
   const finance = getFinanceStateV2();
   const recent = getFinanceTransactions().slice(0, 8);
   root.innerHTML = `

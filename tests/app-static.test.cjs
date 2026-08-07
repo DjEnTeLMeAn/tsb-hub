@@ -67,8 +67,7 @@ assert.ok(app.includes('data-finance-v2-expense-form'),'Today quick expense inpu
 assert.ok(app.includes('function renderFinanceQuickActions'),'Finance quick actions block missing');
 assert.ok(app.includes('data-finance-v2-expense-add'),'Finance quick expense action missing');
 assert.ok(app.includes('function financeCurrentMonthStats'),'current month calculation missing');
-assert.ok(app.includes("item.type==='INCOME'"),'month income calculation missing');
-assert.ok(app.includes("item.type==='EXPENSE'"),'month expense calculation missing');
+assert.ok(app.includes('TSBFinanceCore.getAnalyticsSummary'),'month analytics must delegate to finance core');
 assert.ok(app.includes('function renderFinanceManagementScreen'),'management screen missing');
 assert.ok(app.includes('function renderFinanceAccountsScreen'),'accounts must be moved to management');
 assert.ok(app.includes('function renderFinanceCategoriesScreen'),'category management screen missing');
@@ -93,3 +92,15 @@ const financeRenderEnd=app.indexOf('function ',financeRenderStart+20);
 const financeRender=app.slice(financeRenderStart,financeRenderEnd>financeRenderStart?financeRenderEnd:app.length);
 const ordered=['renderFinanceMoneyNowCard()','renderFinanceQuickActions()','renderFinanceMonthCard()','renderFinanceObligationsCompact()','renderFinanceReservesCompact()','Последние операции','renderFinanceManagementLinks()'];
 let last=-1;for(const marker of ordered){const pos=financeRender.indexOf(marker);assert.ok(pos>last,`Finance main order broken at ${marker}`);last=pos;}
+
+
+// Finance v2 Part3 analytics UI must use the core summary and keep the main card compact.
+assert.ok(app.includes('function renderFinanceAnalyticsScreen'),'Part3 analytics screen missing');
+assert.ok(app.includes('TSBFinanceCore.getAnalyticsSummary'),'analytics UI must use core analytics');
+assert.ok(app.includes("['week','Неделя']"),'analytics week period missing');
+assert.ok(app.includes("['month','Месяц']"),'analytics month period missing');
+assert.ok(app.includes("['3m','3 месяца']"),'analytics 3 month period missing');
+assert.ok(app.includes("['year','Год']"),'analytics year period missing');
+assert.ok(app.includes("['custom','Свой период']"),'analytics custom period missing');
+assert.ok(app.includes('Среднее в день'),'analytics daily average missing');
+assert.ok(app.includes('data-finance-analytics-history'),'analytics to history integration missing');

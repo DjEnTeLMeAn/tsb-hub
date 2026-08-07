@@ -102,3 +102,22 @@
 .finance-v2-manage-list{display:grid;gap:8px;margin-top:10px}
 .finance-v2-manage-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
 @media(max-width:380px){.finance-v2-quick-actions,.finance-v2-month-grid{grid-template-columns:1fr}.finance-v2-month-grid .difference{grid-column:auto}}
+
+
+/* Finance v2 Part3 — analytics */
+.finance-v2-details-button{width:100%;margin-top:12px}
+.finance-v2-period-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.finance-v2-period-buttons .active{outline:1px solid currentColor}
+.finance-v2-period-caption{margin:10px 0 0}
+.finance-v2-analytics-custom{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.finance-v2-analytics-custom label{display:grid;gap:5px;font-size:.84rem}
+.finance-v2-analytics-custom button{grid-column:1/-1}
+.finance-v2-analytics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.finance-v2-analytics-grid>div{display:grid;gap:3px;padding:10px;border-radius:12px;background:rgba(255,255,255,.035)}
+.finance-v2-analytics-grid span,.finance-v2-analytics-category small{font-size:.78rem;opacity:.7}
+.finance-v2-analytics-grid strong{font-size:1.05rem}
+.finance-v2-analytics-categories{display:grid;gap:4px}
+.finance-v2-analytics-category{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.finance-v2-analytics-category:last-child{border-bottom:0}
+.finance-v2-analytics-category>div{display:grid;gap:2px}
+@media(max-width:520px){.finance-v2-analytics-custom{grid-template-columns:1fr}.finance-v2-analytics-custom button{grid-column:auto}}

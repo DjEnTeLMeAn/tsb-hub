@@ -721,7 +721,14 @@ function financeMutationErrorText(error) {
     INVALID_RESERVE_AMOUNT: 'Сумма резерва не может быть отрицательной',
     INVALID_TARGET_AMOUNT: 'Цель должна быть больше нуля',
     NAME_REQUIRED: 'Укажи название',
-    NO_LEGACY_RESERVE_TO_IMPORT: 'Старый резерв уже обработан или отсутствует'
+    NO_LEGACY_RESERVE_TO_IMPORT: 'Старый резерв уже обработан или отсутствует',
+    INVALID_DUE_DATE: 'Укажи корректную дату платежа',
+    INVALID_RECURRENCE: 'Некорректный тип повтора',
+    OBLIGATION_NOT_ACTIVE: 'Этот платёж уже закрыт или отменён',
+    OBLIGATION_NOT_FOUND: 'Обязательный платёж не найден',
+    EXPENSE_NOT_FOUND: 'Подходящая трата не найдена',
+    TRANSACTION_ALREADY_LINKED: 'Эта трата уже связана с другим платежом',
+    ACCOUNT_NOT_FOUND: 'Счёт не найден'
   })[error] || 'Не удалось изменить финансы';
 }
 function applyFinanceMutation(result, message = '') {
@@ -790,7 +797,8 @@ async function deleteFinanceV2Transaction(id) {
   if (!transaction || TSBFinanceCore.isSystemLocked(transaction)) return;
   const ok = await openConfirmDialog({ title: 'Удалить операцию?', message: 'Её влияние на баланс будет полностью отменено.', confirmText: 'Подтвердить', danger: true });
   if (!ok) return;
-  applyFinanceMutation(TSBFinanceCore.deleteTransaction(getFinanceStateV2(), id), 'Операция удалена');
+  const mutation = TSBFinanceCore.deleteTransaction(getFinanceStateV2(), id);
+  applyFinanceMutation(mutation, mutation?.reactivatedObligationIds?.length ? 'Операция удалена · платёж снова активен' : 'Операция удалена');
 }
 function bindFinanceV2GlobalEvents() {
   if (window.__tsbFinanceV2EventsBound) return;
@@ -1555,6 +1563,96 @@ function renderFinanceReservesScreen(root = $('#tab-finance')) {
   bindFinanceV2Screen(root);
 }
 
+function getFinanceActiveObligations() {
+  return TSBFinanceCore.getActiveObligations(getFinanceStateV2());
+}
+function getFinanceUpcomingObligations() {
+  return TSBFinanceCore.getUpcomingObligations(getFinanceStateV2(),{fromDate:toISODate(new Date())});
+}
+function getFinanceUpcomingTotal() {
+  return TSBFinanceCore.getUpcomingObligationsTotal(getFinanceStateV2(),{fromDate:toISODate(new Date())});
+}
+function financeObligationDueText(obligation) {
+  const today=toISODate(new Date());
+  if(obligation.dueDate<today)return `Просрочено · ${shortDate(obligation.dueDate)}`;
+  if(obligation.dueDate===today)return 'Сегодня';
+  return shortDate(obligation.dueDate);
+}
+function financeObligationPaidTransaction(obligation) {
+  return obligation.linkedTransactionId ? getFinanceTransaction(obligation.linkedTransactionId) : null;
+}
+function renderFinanceObligationCard(obligation,{compact=false}={}) {
+  const paidTx=financeObligationPaidTransaction(obligation);
+  const statusLabel=obligation.status==='PAID'?'Оплачено':obligation.status==='CANCELLED'?'Отменено':financeObligationDueText(obligation);
+  const statusClass=obligation.status==='PAID'?'done-badge':obligation.status==='CANCELLED'?'muted-badge':(obligation.dueDate<toISODate(new Date())?'overdue':'secondary');
+  const paidLine=paidTx?`<p class="muted">Фактически: ${formatRub(paidTx.amount)}${paidTx.amount!==obligation.amount?` · план ${formatRub(obligation.amount)}`:''}</p>`:'';
+  return `<article class="finance-v2-obligation-card ${obligation.status.toLowerCase()}">
+    <div class="item-top"><div><div class="badge-row"><span class="badge ${statusClass}">${escapeHTML(statusLabel)}</span>${obligation.recurrence==='MONTHLY'?'<span class="badge">ежемесячно</span>':''}</div><h3>${escapeHTML(obligation.name)}</h3><div class="finance-v2-obligation-amount">${formatRub(obligation.amount)}</div>${obligation.note?`<p class="muted">${escapeHTML(obligation.note)}</p>`:''}${paidLine}</div></div>
+    ${compact||obligation.status!=='ACTIVE'?'':`<div class="finance-v2-obligation-actions"><button class="primary-button small" type="button" data-finance-obligation-pay="${escapeHTML(obligation.id)}">Оплатить сейчас</button><button class="ghost-button small" type="button" data-finance-obligation-link="${escapeHTML(obligation.id)}">Связать с тратой</button><button class="ghost-button small" type="button" data-finance-obligation-edit="${escapeHTML(obligation.id)}">Изм.</button><button class="danger-button small" type="button" data-finance-obligation-cancel="${escapeHTML(obligation.id)}">Отменить</button></div>`}
+  </article>`;
+}
+function renderFinanceObligationsCompact() {
+  const upcoming=getFinanceUpcomingObligations(); const preview=upcoming.slice(0,3);
+  return `<section class="card finance-v2-obligations-card"><div class="card-title-row"><div><h2>Ближайшие платежи</h2><p class="muted">ACTIVE обязательства на ближайшие ${TSBFinanceCore.UPCOMING_OBLIGATION_DAYS} дней.</p></div><span class="badge important">${formatRub(getFinanceUpcomingTotal())}</span></div>
+    <div class="finance-v2-obligation-list">${preview.length?preview.map(item=>renderFinanceObligationCard(item,{compact:true})).join(''):'<div class="empty">Ближайших обязательных платежей нет.</div>'}</div>
+    <div class="finance-v2-section-actions"><button class="ghost-button" type="button" data-finance-obligations-open>Все платежи</button><button class="primary-button" type="button" data-finance-obligation-create>+ Добавить</button></div>
+  </section>`;
+}
+async function openFinanceObligationDialog(obligationId='') {
+  const finance=getFinanceStateV2();const current=finance.obligations.find(item=>item.id===obligationId)||null;
+  if(current&&current.status!=='ACTIVE')return;
+  const result=await openEditDialog({title:current?'Изменить платёж':'Добавить обязательный платёж',fields:[
+    {name:'name',label:'Название',value:current?.name||'',placeholder:'Интернет, коммунальные'},
+    {name:'amount',label:'Сумма',value:current?.amount||'',placeholder:'Напр. 850'},
+    {name:'dueDate',label:'Дата',type:'date',value:current?.dueDate||toISODate(new Date())},
+    {name:'recurrence',label:'Повтор',type:'select',value:current?.recurrence||'NONE',options:[{value:'NONE',label:'Нет'},{value:'MONTHLY',label:'Ежемесячно'}]},
+    {name:'note',label:'Описание — необязательно',type:'textarea',value:current?.note||'',placeholder:'Комментарий'}
+  ],submitText:'Подтвердить'});
+  if(!result)return;
+  const draft={name:String(result.name||'').trim(),amount:normalizeMoneyInput(result.amount),dueDate:normalizeDateInput(result.dueDate),recurrence:result.recurrence,note:String(result.note||'').trim()};
+  const mutation=current?TSBFinanceCore.updateObligation(finance,current.id,draft,{fromDate:toISODate(new Date())}):TSBFinanceCore.createObligation(finance,draft,{idFactory:uid,fromDate:toISODate(new Date())});
+  applyFinanceMutation(mutation,current?'Платёж изменён':'Платёж добавлен');
+}
+async function payFinanceObligation(obligationId) {
+  const finance=getFinanceStateV2();const obligation=finance.obligations.find(item=>item.id===obligationId);const account=getDefaultFinanceAccount();if(!obligation||!account)return;
+  const now=new Date();const today=toISODate(now);const hm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const result=await openEditDialog({title:`Оплатить · ${obligation.name}`,fields:[
+    {name:'amount',label:'Сумма',value:obligation.amount},
+    {name:'accountId',label:'Счёт',type:'select',value:account.id,options:financeAccountOptions(account.id)},
+    {name:'categoryId',label:'Категория',type:'select',value:'other',options:financeCategoryOptions('other')},
+    {name:'date',label:'Дата',type:'date',value:today},
+    {name:'time',label:'Время',type:'time',value:hm},
+    {name:'description',label:'Описание',type:'textarea',value:obligation.name,placeholder:'Необязательно'}
+  ],submitText:'Оплатить'});
+  if(!result)return;
+  const mutation=TSBFinanceCore.payObligation(finance,obligationId,{accountId:result.accountId,categoryId:result.categoryId,amount:normalizeMoneyInput(result.amount),date:normalizeDateInput(result.date)||today,time:result.time,description:result.description,now:new Date().toISOString(),idFactory:uid});
+  applyFinanceMutation(mutation,mutation?.nextObligation?'Оплачено · следующий платёж создан':'Платёж оплачен');
+}
+function financeLinkableExpenses(obligationId) {
+  const finance=getFinanceStateV2();const used=new Set(finance.obligations.filter(item=>item.id!==obligationId&&item.linkedTransactionId).map(item=>item.linkedTransactionId));
+  return getFinanceTransactions({type:'EXPENSE'}).filter(item=>!used.has(item.id)).slice(0,20);
+}
+async function linkFinanceObligation(obligationId) {
+  const obligation=getFinanceStateV2().obligations.find(item=>item.id===obligationId);if(!obligation)return;
+  const expenses=financeLinkableExpenses(obligationId);if(!expenses.length){showToast('Недавних расходов для связывания нет');return;}
+  const result=await openEditDialog({title:`Связать · ${obligation.name}`,fields:[{name:'transactionId',label:'Существующая трата',type:'select',value:expenses[0].id,options:expenses.map(item=>({value:item.id,label:`${shortDate(item.date)} · ${formatRub(item.amount)} · ${financeTypeLabel(item)}${item.description?` · ${item.description}`:''}`}))}],submitText:'Связать'});
+  if(!result)return;
+  const mutation=TSBFinanceCore.linkObligationToTransaction(getFinanceStateV2(),obligationId,result.transactionId,{now:new Date().toISOString(),idFactory:uid});
+  applyFinanceMutation(mutation,mutation?.nextObligation?'Связано · следующий платёж создан':'Платёж связан с тратой');
+}
+async function cancelFinanceObligation(obligationId) {
+  const obligation=getFinanceStateV2().obligations.find(item=>item.id===obligationId);if(!obligation)return;
+  const ok=await openConfirmDialog({title:'Отменить обязательный платёж?',message:`${obligation.name} больше не будет учитываться как будущая оплата.`,confirmText:'Отменить платёж',danger:true});if(!ok)return;
+  applyFinanceMutation(TSBFinanceCore.cancelObligation(getFinanceStateV2(),obligationId),'Платёж отменён');
+}
+function renderFinanceObligationsScreen(root=$('#tab-finance')) {
+  if(!root)return;const finance=getFinanceStateV2();const active=TSBFinanceCore.getActiveObligations(finance).sort((a,b)=>a.dueDate.localeCompare(b.dueDate));const closed=finance.obligations.filter(item=>item.status!=='ACTIVE').sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0,10);
+  root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Обязательные платежи</h2><p class="muted">План не меняет баланс. Деньги списываются только реальной EXPENSE.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
+    <section class="card"><div class="card-title-row"><div><h2>Активные</h2><p class="muted">Ближайшие и просроченные платежи.</p></div><button class="primary-button small" type="button" data-finance-obligation-create>+ Добавить</button></div><div class="finance-v2-obligation-list full">${active.length?active.map(item=>renderFinanceObligationCard(item)).join(''):'<div class="empty">Активных обязательных платежей нет.</div>'}</div></section>
+    ${closed.length?`<details class="card finance-v2-closed-obligations"><summary>Недавно закрытые · ${closed.length}</summary><div class="finance-v2-obligation-list">${closed.map(item=>renderFinanceObligationCard(item)).join('')}</div></details>`:''}`;
+  bindFinanceV2Screen(root);
+}
+
 function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-v2-account-add]')?.addEventListener('click', () => openFinanceV2AccountDialog());
   root.querySelectorAll('[data-finance-v2-account-edit]').forEach(button => button.onclick = () => openFinanceV2AccountDialog(button.dataset.financeV2AccountEdit));
@@ -1570,6 +1668,12 @@ function bindFinanceV2Screen(root) {
   root.querySelectorAll('[data-finance-reserve-adjust]').forEach(button=>button.onclick=()=>adjustFinanceReserve(button.dataset.financeReserveAdjust,button.dataset.direction));
   root.querySelectorAll('[data-finance-reserve-archive]').forEach(button=>button.onclick=()=>archiveFinanceReserve(button.dataset.financeReserveArchive));
   root.querySelector('[data-finance-legacy-reserve-import]')?.addEventListener('click',importLegacyFinanceReserve);
+  root.querySelector('[data-finance-obligations-open]')?.addEventListener('click',()=>{state.financeSubscreen='obligations';renderFinance();});
+  root.querySelectorAll('[data-finance-obligation-create]').forEach(button=>button.onclick=()=>openFinanceObligationDialog());
+  root.querySelectorAll('[data-finance-obligation-edit]').forEach(button=>button.onclick=()=>openFinanceObligationDialog(button.dataset.financeObligationEdit));
+  root.querySelectorAll('[data-finance-obligation-pay]').forEach(button=>button.onclick=()=>payFinanceObligation(button.dataset.financeObligationPay));
+  root.querySelectorAll('[data-finance-obligation-link]').forEach(button=>button.onclick=()=>linkFinanceObligation(button.dataset.financeObligationLink));
+  root.querySelectorAll('[data-finance-obligation-cancel]').forEach(button=>button.onclick=()=>cancelFinanceObligation(button.dataset.financeObligationCancel));
 }
 
 function ensureFinanceHistoryState() {
@@ -1649,6 +1753,7 @@ function renderFinance() {
   if (!root) return;
   if (state.financeHistoryOpen && typeof renderFinanceHistoryV2 === 'function') { renderFinanceHistoryV2(root); return; }
   if (state.financeSubscreen === 'reserves') { renderFinanceReservesScreen(root); return; }
+  if (state.financeSubscreen === 'obligations') { renderFinanceObligationsScreen(root); return; }
   const finance = getFinanceStateV2();
   const accounts = getFinanceAccounts();
   const recent = getFinanceTransactions().slice(0, 8);
@@ -1663,6 +1768,8 @@ function renderFinance() {
       <div class="card-title-row"><div><h2>Счета</h2><p class="muted">Обычные траты идут со счёта по умолчанию.</p></div><button class="ghost-button small" type="button" data-finance-v2-account-add>+ Счёт</button></div>
       <div class="finance-v2-accounts">${accounts.map(renderFinanceV2AccountCard).join('') || '<div class="empty">Счетов пока нет.</div>'}</div>
     </section>
+
+    ${renderFinanceObligationsCompact()}
 
     ${renderFinanceReservesCompact()}
 

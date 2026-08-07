@@ -52,3 +52,17 @@
 .finance-v2-legacy-review{display:grid;gap:10px;border-color:rgba(245,158,11,.34)}
 .finance-v2-legacy-review h3{margin:0 0 4px}
 @media(min-width:650px){.finance-v2-reserve-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+
+/* Finance v2 Part 2 — obligations */
+.finance-v2-obligations-card,.finance-v2-closed-obligations{overflow:hidden}
+.finance-v2-obligation-list{display:grid;gap:9px;margin-top:10px}
+.finance-v2-obligation-list.full{gap:12px}
+.finance-v2-obligation-card{display:grid;gap:10px;padding:13px;border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025)}
+.finance-v2-obligation-card h3{margin:4px 0}
+.finance-v2-obligation-amount{font-size:1.05rem;font-weight:900}
+.finance-v2-obligation-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.finance-v2-obligation-card.paid{opacity:.78}
+.finance-v2-obligation-card.cancelled{opacity:.58}
+.finance-v2-closed-obligations>summary{min-height:44px;font-weight:850;cursor:pointer}
+@media(min-width:720px){.finance-v2-obligation-actions{grid-template-columns:repeat(4,minmax(0,1fr))}}

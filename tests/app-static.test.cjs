@@ -38,3 +38,12 @@ assert.ok(app.includes('TSBFinanceCore.createReserve'),'reserve create must use 
 assert.ok(app.includes('TSBFinanceCore.adjustReserveAmount'),'reserve adjustment must use finance core');
 assert.ok(app.includes('TSBFinanceCore.importLegacyReserve'),'legacy reserve import must use finance core');
 assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 must not introduce an override module');
+
+
+// Finance v2 Part 2 obligation UI must preserve the one-transaction payment model.
+assert.ok(app.includes('function renderFinanceObligationsScreen'),'obligation management screen missing');
+assert.ok(app.includes('data-finance-obligation-pay'),'obligation payment action missing');
+assert.ok(app.includes('TSBFinanceCore.payObligation'),'payment UI must use core payObligation');
+assert.ok(app.includes('TSBFinanceCore.linkObligationToTransaction'),'link UI must use core linking');
+assert.ok(app.includes('data-finance-obligation-link'),'existing-expense link action missing');
+assert.ok(app.includes('reactivatedObligationIds'),'transaction deletion UI must surface obligation reactivation');

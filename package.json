@@ -1,0 +1,9 @@
+{
+  "name": "tsb-hub",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "lint": "node --check js/finance-core.js",
+    "build": "node --check js/finance-core.js"
+  }
+}

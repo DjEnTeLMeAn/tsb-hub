@@ -1,0 +1,41 @@
+name: Finance v2 Part1 Report Fix Retry
+on:
+  push:
+    branches: [finance-v2-part1-report-fix]
+    paths:
+      - 'scripts/finance-v2-report-fix-retry.py'
+      - '.github/workflows/finance-v2-report-fix-retry.yml'
+permissions:
+  contents: write
+jobs:
+  fix-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: finance-v2-part1-report-fix
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply fixed report hotfix
+        run: python3 scripts/finance-v2-report-fix-retry.py
+      - name: Test
+        run: npm test
+      - name: Lint
+        run: npm run lint
+      - name: Build check
+        run: npm run build
+      - name: Verify cleanup
+        run: |
+          test ! -e scripts/finance-v2-report-fix.py
+          test ! -e scripts/finance-v2-report-fix-retry.py
+          test ! -e .github/workflows/finance-v2-report-fix.yml
+          test ! -e .github/workflows/finance-v2-report-fix-retry.yml
+      - name: Commit result
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Finance v2 part1: align GPT report with derived balances'
+          git push origin HEAD:finance-v2-part1-report-fix

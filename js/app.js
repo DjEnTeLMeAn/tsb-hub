@@ -1,4 +1,4 @@
-const APP_VERSION = '0.11.1-finance-v2-part1';
+const APP_VERSION = '0.12.0-finance-v2-part2';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -2978,205 +2978,7 @@ function bindCommonActions(root = document) {
     };
   });
 
-  $$('[data-quick-finance-category]', root).forEach(btn => {
-    btn.onclick = () => {
-      const form = btn.closest('.card')?.querySelector('[data-finance-form]') || $('[data-finance-form]', root);
-      const select = form?.querySelector('select[name="category"]');
-      const amount = form?.querySelector('input[name="amount"]');
-      if (select) select.value = btn.dataset.quickFinanceCategory;
-      if (amount) amount.focus();
-    };
-  });
-
-  $$('[data-finance-form]', root).forEach(form => {
-    form.onsubmit = event => {
-      event.preventDefault();
-      const fd = new FormData(form);
-      const amount = normalizeMoneyInput(fd.get('amount'));
-      if (!amount) return;
-      const day = getFinance();
-      day.noExpenses = false;
-      const expense = {
-        id: uid('exp'),
-        amount,
-        category: normalizeFinanceCategory(fd.get('category')),
-        reason: normalizeFinanceReason(fd.get('reason')),
-        comment: String(fd.get('comment') || '').trim(),
-        time: fd.get('time') || '',
-        createdAt: new Date().toISOString()
-      };
-      day.expenses.push(expense);
-      addAvailableBalance(-moneyNumber(amount));
-      addFinanceOperation('expense', -moneyNumber(amount), getFinanceCategoryLabel(expense.category), expense.comment, expense.id, state.selectedDate);
-      markChanged();
-      showToast('Трата добавлена');
-    };
-  });
-
-  $$('[data-finance-delete]', root).forEach(btn => {
-    btn.onclick = async () => {
-      if (!await openConfirmDialog('Удалить трату?')) return;
-      const day = getFinance();
-      const expense = day.expenses.find(item => item.id === btn.dataset.financeDelete);
-      if (expense) addAvailableBalance(moneyNumber(expense.amount));
-      day.expenses = day.expenses.filter(expense => expense.id !== btn.dataset.financeDelete);
-      getFinanceContext().operations = getFinanceContext().operations.filter(op => op.sourceId !== btn.dataset.financeDelete);
-      markChanged();
-    };
-  });
-
-  $$('[data-finance-edit]', root).forEach(btn => {
-    btn.onclick = async () => {
-      const expense = getFinance().expenses.find(item => item.id === btn.dataset.financeEdit);
-      if (!expense) return;
-      const result = await openEditDialog({
-        title: 'Изменить трату',
-        fields: [
-          { name: 'amount', label: 'Сумма, ₽', value: expense.amount || '', placeholder: 'Напр. 250' },
-          { name: 'category', label: 'Категория', type: 'select', value: expense.category, options: FINANCE_CATEGORIES },
-          { name: 'reason', label: 'Причина', type: 'select', value: expense.reason || '', options: FINANCE_REASONS },
-          { name: 'comment', label: 'Комментарий', value: expense.comment || '', placeholder: 'Необязательно' },
-          { name: 'time', label: 'Время', type: 'time', value: expense.time || '' }
-        ]
-      });
-      if (!result) return;
-      const amount = normalizeMoneyInput(result.amount);
-      if (!amount) return;
-      const oldAmount = moneyNumber(expense.amount);
-      expense.amount = amount;
-      expense.category = normalizeFinanceCategory(result.category);
-      expense.reason = normalizeFinanceReason(result.reason);
-      expense.comment = String(result.comment || '').trim();
-      expense.time = String(result.time || '').trim();
-      addAvailableBalance(oldAmount - moneyNumber(amount));
-      const op = getFinanceContext().operations.find(item => item.sourceId === expense.id && item.type === 'expense');
-      if (op) {
-        op.amount = String(-moneyNumber(amount));
-        op.title = getFinanceCategoryLabel(expense.category);
-        op.comment = expense.comment;
-      }
-      markChanged();
-    };
-  });
-
-
-  $$('[data-finance-context-form]', root).forEach(form => {
-    form.onsubmit = event => {
-      event.preventDefault();
-      const fd = new FormData(form);
-      const context = getFinanceContext();
-      const diff = applyBalanceCorrection(fd.get('availableBalance'));
-      context.reserveBalance = normalizeMoneyInput(fd.get('reserveBalance'));
-      markChanged();
-      showToast(diff ? `Баланс обновлён: ${diff > 0 ? '+' : ''}${formatRub(diff)}` : 'Баланс сохранён');
-    };
-  });
-
-  $$('[data-finance-goals-form]', root).forEach(form => {
-    form.onsubmit = event => {
-      event.preventDefault();
-      const context = getFinanceContext();
-      context.savingGoal = serializeFinanceGoals(new FormData(form));
-      markChanged();
-      showToast('Финансовые цели сохранены');
-    };
-  });
-
-  $$('[data-finance-plan-form]', root).forEach(form => {
-    form.onsubmit = event => {
-      event.preventDefault();
-      const fd = new FormData(form);
-      const amount = normalizeMoneyInput(fd.get('amount'));
-      if (!amount) return;
-      const item = {
-        id: uid(form.dataset.financePlanForm === 'income' ? 'inc' : 'obl'),
-        amount,
-        date: normalizeDateInput(fd.get('date')),
-        title: String(fd.get('title') || '').trim(),
-        comment: String(fd.get('comment') || '').trim(),
-        status: 'planned',
-        completedAt: '',
-        createdAt: new Date().toISOString()
-      };
-      const context = getFinanceContext();
-      if (form.dataset.financePlanForm === 'income') context.incomes.push(item);
-      else context.obligations.push(item);
-      markChanged();
-      showToast(form.dataset.financePlanForm === 'income' ? 'Поступление добавлено' : 'Обязательный расход добавлен');
-    };
-  });
-
-  $$('[data-finance-plan-complete]', root).forEach(btn => {
-    btn.onclick = () => {
-      const context = getFinanceContext();
-      const type = btn.dataset.planType;
-      const key = type === 'income' ? 'incomes' : 'obligations';
-      const item = context[key].find(entry => entry.id === btn.dataset.financePlanComplete);
-      if (!item || item.status !== 'planned') return;
-      item.status = type === 'income' ? 'received' : 'paid';
-      item.completedAt = new Date().toISOString();
-      const amount = moneyNumber(item.amount);
-      if (type === 'income') {
-        addAvailableBalance(amount);
-        addFinanceOperation('income', amount, item.title || 'Поступление', item.comment, item.id, item.date || state.selectedDate);
-        showToast('Поступление добавлено в баланс');
-      } else {
-        addAvailableBalance(-amount);
-        addFinanceOperation('obligation', -amount, item.title || 'Обязательный расход', item.comment, item.id, item.date || state.selectedDate);
-        showToast('Обязательный расход списан');
-      }
-      markChanged();
-    };
-  });
-
-  $$('[data-finance-operation-delete]', root).forEach(btn => {
-    btn.onclick = async () => {
-      const context = getFinanceContext();
-      const op = context.operations.find(item => item.id === btn.dataset.financeOperationDelete);
-      if (!op || op.type !== 'adjustment') return;
-      if (!await openConfirmDialog('Удалить корректировку баланса?')) return;
-      addAvailableBalance(-moneyNumber(op.amount));
-      context.operations = context.operations.filter(item => item.id !== op.id);
-      markChanged();
-      showToast('Корректировка удалена');
-    };
-  });
-
-  $$('[data-finance-plan-delete]', root).forEach(btn => {
-    btn.onclick = async () => {
-      if (!await openConfirmDialog(btn.dataset.planType === 'income' ? 'Удалить плановое поступление?' : 'Удалить обязательный расход?')) return;
-      const context = getFinanceContext();
-      const key = btn.dataset.planType === 'income' ? 'incomes' : 'obligations';
-      context[key] = context[key].filter(item => item.id !== btn.dataset.financePlanDelete);
-      markChanged();
-    };
-  });
-
-  $$('[data-finance-plan-edit]', root).forEach(btn => {
-    btn.onclick = async () => {
-      const context = getFinanceContext();
-      const key = btn.dataset.planType === 'income' ? 'incomes' : 'obligations';
-      const item = context[key].find(entry => entry.id === btn.dataset.financePlanEdit);
-      if (!item) return;
-      const result = await openEditDialog({
-        title: btn.dataset.planType === 'income' ? 'Изменить поступление' : 'Изменить обязательный расход',
-        fields: [
-          { name: 'amount', label: 'Сумма, ₽', value: item.amount || '', placeholder: 'Напр. 5000' },
-          { name: 'date', label: 'Дата', type: 'date', value: item.date || state.selectedDate },
-          { name: 'title', label: btn.dataset.planType === 'income' ? 'Источник' : 'Что оплатить', value: item.title || '' },
-          { name: 'comment', label: 'Комментарий', value: item.comment || '', placeholder: 'Необязательно' }
-        ]
-      });
-      if (!result) return;
-      const amount = normalizeMoneyInput(result.amount);
-      if (!amount) return;
-      item.amount = amount;
-      item.date = normalizeDateInput(result.date);
-      item.title = String(result.title || '').trim();
-      item.comment = String(result.comment || '').trim();
-      markChanged();
-    };
-  });
+  // Finance v2 owns all active finance mutations; legacy Finance v1 binders were removed.
 
   $$('[data-important-delete]', root).forEach(btn => {
     btn.onclick = async () => {
@@ -3297,29 +3099,34 @@ function applyImportedData(normalized) {
 function buildGptReport() {
   const monday = getMondayISO(state.selectedDate);
   const context = getFinanceContext();
-  const formatPlan = (items, type) => items.length
-    ? [...items].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99'))).map(item => {
-        const status = type === 'income'
-          ? (item.status === 'received' ? 'получено' : getPlanItemStatusText(item, 'income'))
-          : (item.status === 'paid' ? 'оплачено' : getPlanItemStatusText(item, 'obligation'));
-        return `  - ${item.date ? shortDate(item.date) : 'без даты'} · ${formatRub(item.amount)} · ${item.title || (type === 'income' ? 'поступление' : 'обязательный расход')} · ${status}${item.comment ? ` · ${item.comment}` : ''}`;
-      }).join('\n')
+  const financeState = getFinanceStateV2();
+  const coverage = getFinanceCoverage();
+  const accountLines = getFinanceAccounts().length
+    ? getFinanceAccounts().map(account => `  - ${account.name}: ${formatRub(getFinanceAccountBalance(account.id))}`).join('\n')
+    : '  - нет активных счетов';
+  const activeReserves = TSBFinanceCore.getActiveReserves(financeState);
+  const reserveLines = activeReserves.length
+    ? activeReserves.map(item => `  - ${item.name}: ${formatRub(item.amount)}${item.targetAmount ? ` / цель ${formatRub(item.targetAmount)}` : ''}`).join('\n')
+    : '  - нет активных резервов';
+  const activeObligations = TSBFinanceCore.getActiveObligations(financeState).sort((x,y)=>String(x.dueDate).localeCompare(String(y.dueDate)));
+  const obligationLines = activeObligations.length
+    ? activeObligations.map(item => `  - ${shortDate(item.dueDate)} · ${formatRub(item.amount)} · ${item.name}${item.recurrence === 'MONTHLY' ? ' · ежемесячно' : ''}`).join('\n')
+    : '  - нет ACTIVE обязательств';
+  const plannedIncomeLines = context.incomes?.length
+    ? [...context.incomes].sort((x,y)=>String(x.date||'9999-99-99').localeCompare(String(y.date||'9999-99-99'))).map(item => `  - ${item.date ? shortDate(item.date) : 'без даты'} · ${formatRub(item.amount)} · ${item.title || 'ожидаемое поступление'}${item.comment ? ` · ${item.comment}` : ''}`).join('\n')
     : '  - не указаны';
-  const incomeLines = formatPlan(context.incomes, 'income');
-  const obligationLines = formatPlan(context.obligations, 'obligation');
-  const operationLines = context.operations.length
-    ? context.operations.slice(0, 40).map(op => `  - ${shortDate(op.date)} · ${op.type} · ${moneyNumber(op.amount) > 0 ? '+' : ''}${formatRub(op.amount)} · ${op.title || 'операция'}${op.comment ? ` · ${op.comment}` : ''}`).join('\n')
+  const recentTransactions = getFinanceTransactions().slice(0,40);
+  const operationLines = recentTransactions.length
+    ? recentTransactions.map(tx => `  - ${shortDate(tx.date)}${tx.time ? ` ${tx.time}` : ''} · ${tx.type} · ${financeSignedAmount(tx)} · ${financeTypeLabel(tx)}${tx.description ? ` · ${tx.description}` : ''}`).join('\n')
     : '  - операций пока нет';
-  const lines = [`Отчёт TSB Hub за неделю ${shortDate(monday)} — ${shortDate(addDays(monday, 6))}`];
   const goalLines = context.savingGoal ? context.savingGoal.split('\n').map(line => `  - ${line}`).join('\n') : '  - не указано';
-  const accountLines = getFinanceAccounts().length ? getFinanceAccounts().map(account => `  - ${account.name}: ${formatRub(getFinanceAccountBalance(account.id))}`).join('\n') : '  - нет активных счетов';
-  lines.push(`\nФинансовый контекст:\n  Всего на счетах: ${formatRub(getFinanceTotalBalance())}\
-  Счета:\
-${accountLines}\n  Legacy-резерв (не включён в счета): ${context.reserveBalance ? formatRub(context.reserveBalance) : 'не указано'}\n  Финансовые цели:\n${goalLines}\n  Плановые поступления:\n${incomeLines}\n  Обязательные расходы:\n${obligationLines}\n  История операций / корректировки:\n${operationLines}`);
+  const legacyReserveLine = financeState.migration?.legacyReserveStatus === 'REVIEW_REQUIRED' && Number(financeState.migration?.legacyReserveAmount) > 0
+    ? `\n  Legacy-резерв на проверке (не включён в резервы автоматически): ${formatRub(financeState.migration.legacyReserveAmount)}`
+    : '';
+  const lines = [`Отчёт TSB Hub за неделю ${shortDate(monday)} — ${shortDate(addDays(monday, 6))}`];
+  lines.push(`\nФинансовый контекст Finance v2:\n  Всего на счетах: ${formatRub(coverage.totalAccounts)}\n  В резервах: ${formatRub(coverage.reserved)}\n  Обязательное скоро (${TSBFinanceCore.UPCOMING_OBLIGATION_DAYS} дн.): ${formatRub(coverage.upcoming)}\n  Свободно: ${formatRub(coverage.free)}${legacyReserveLine}\n  Формула: Свободно = счета − активные резервы − ACTIVE обязательства ближайших ${TSBFinanceCore.UPCOMING_OBLIGATION_DAYS} дней.\n  Резервы и обязательства — разные назначения и автоматически друг с другом не связываются.\n  Счета:\n${accountLines}\n  Активные резервы:\n${reserveLines}\n  ACTIVE обязательства:\n${obligationLines}\n  Ожидаемые поступления (legacy; НЕ входят в «Свободно» и не считаются уже существующими деньгами):\n${plannedIncomeLines}\n  Финансовые цели:\n${goalLines}\n  Последние реальные операции:\n${operationLines}`);
   const currentPlan = getGptPlan();
-  if (currentPlan.text) {
-    lines.push(`\nТекущий план от GPT на эту неделю уже сохранён в приложении:\n${currentPlan.text}`);
-  }
+  if (currentPlan.text) lines.push(`\nТекущий план от GPT на эту неделю уже сохранён в приложении:\n${currentPlan.text}`);
   for (let i = 0; i < 7; i += 1) {
     const iso = addDays(monday, i);
     const health = getHealth(iso);
@@ -3327,22 +3134,14 @@ ${accountLines}\n  Legacy-резерв (не включён в счета): ${co
     const progress = getProgress(iso);
     const finance = getFinance(iso);
     const financeSummary = getFinanceSummary(iso);
-    const report = getDailyReport(iso);
-    const reportLine = hasDailyReport(iso)
-      ? `самоощущение ${report.selfScore || '—'}/100, желание действовать ${report.driveScore || '—'}/100, итог: ${report.text || 'без текста'}`
-      : 'не заполнен';
-    const mealLines = health.meals.length
-      ? health.meals.map(meal => `    - ${meal.time || 'без времени'} · ${meal.name}${meal.amount ? ` (${meal.amount})` : ''}`).join('\n')
-      : '    - питания не записано';
-    const taskLines = tasks.length
-      ? tasks.map(task => `    - [${task.done ? 'x' : ' '}] ${PRIORITIES[task.priority] || 'Важно'}: ${task.text}`).join('\n')
-      : '    - задач нет';
-    const financeLines = finance.expenses.length
-      ? finance.expenses.map(expense => `    - ${expense.time || 'без времени'} · ${getFinanceCategoryLabel(expense.category)} · ${formatRub(expense.amount)}${getFinanceReasonLabel(expense.reason) ? ` · причина: ${getFinanceReasonLabel(expense.reason)}` : ''}${expense.comment ? ` · ${expense.comment}` : ''}`).join('\n')
-      : (finance.noExpenses ? '    - день отмечен без трат' : '    - трат не записано');
-    lines.push(`\n${WEEKDAY_SHORT[i]} · ${formatHumanDate(iso)}\n  Ежедневный отчёт: ${reportLine}\n  Задачи: ${progress.done}/${progress.total}, выполнение ${progress.pct}%\n${taskLines}\n  Питание:\n${mealLines}\n  Вес: ${health.weight ? `${health.weight} кг` : 'не указан'}\n  Активность: ${health.activityNote || 'не указана'}\n  Заметка: ${health.note || 'нет'}\n  Финансы: всего ${formatRub(financeSummary.total)}, еда ${formatRub(financeSummary.food)}, транспорт ${formatRub(financeSummary.transport)}, другое ${formatRub(financeSummary.other)}, эмоциональные/импульсивные траты ${formatRub(financeSummary.impulse)}\n${financeLines}\n  Локальные подсказки:\n${getLocalInsightsReportText(iso)}`);
+    const daily = getDailyReport(iso);
+    const reportLine = hasDailyReport(iso) ? `самоощущение ${daily.selfScore || '—'}/100, желание действовать ${daily.driveScore || '—'}/100, итог: ${daily.text || 'без текста'}` : 'не заполнен';
+    const mealLines = health.meals.length ? health.meals.map(meal => `    - ${meal.time || 'без времени'} · ${meal.name}${meal.amount ? ` (${meal.amount})` : ''}`).join('\n') : '    - питания не записано';
+    const taskLines = tasks.length ? tasks.map(task => `    - [${task.done ? 'x' : ' '}] ${PRIORITIES[task.priority] || 'Важно'}: ${task.text}`).join('\n') : '    - задач нет';
+    const financeLines = finance.expenses.length ? finance.expenses.map(expense => `    - ${expense.time || 'без времени'} · ${getFinanceCategoryLabel(expense.category)} · ${formatRub(expense.amount)}${expense.comment ? ` · ${expense.comment}` : ''}`).join('\n') : '    - трат не записано';
+    lines.push(`\n${WEEKDAY_SHORT[i]} · ${formatHumanDate(iso)}\n  Ежедневный отчёт: ${reportLine}\n  Задачи: ${progress.done}/${progress.total}, выполнение ${progress.pct}%\n${taskLines}\n  Питание:\n${mealLines}\n  Вес: ${health.weight ? `${health.weight} кг` : 'не указан'}\n  Активность: ${health.activityNote || 'не указана'}\n  Заметка: ${health.note || 'нет'}\n  Финансы дня: потрачено ${formatRub(financeSummary.total)}, еда ${formatRub(financeSummary.food)}, транспорт ${formatRub(financeSummary.transport)}, другое ${formatRub(financeSummary.other)}\n${financeLines}\n  Локальные подсказки:\n${getLocalInsightsReportText(iso)}`);
   }
-  lines.push("\nЗапрос к GPT: проанализируй все данные недели в контексте TSB Hub: задачи, незавершёнку, питание, вес, активность, заметки, локальные подсказки, дневные траты, дни без трат, ежедневные отчёты, живой баланс, активы/резерв, операции, корректировки баланса, плановые поступления, обязательные расходы и финансовые цели. Сам оцени финансовую ситуацию пользователя на следующую неделю и объясни вывод по данным. Не дави предупреждениями о нехватке денег: если денег не хватает, дай спокойный практический план без морализаторства. Проверь, где можно сократить расходы без вреда для базовых нужд, отдельно разберись с едой, транспортом, импульсивными/стрессовыми тратами и днями перегруза. Составь план на следующую неделю по дням: деньги, питание, задачи, отдых/нагрузка. Любые идеи по накоплениям и вложениям предлагай только если после обязательных расходов, еды, транспорта и минимального резерва реально остаются свободные деньги. Учитывай несколько финансовых целей и предложи реалистичный месячный доход/накопление, если данных хватает. В конце дай структурированный блок 'План на неделю' и отдельные блоки 'Совет на сегодня', 'Финансовые советы', 'Советы по питанию', 'Советы по задачам', чтобы их можно было вставить обратно в TSB Hub.");
+  lines.push("\nЗапрос к GPT: проанализируй неделю по данным TSB Hub. Для финансов используй Finance v2: реальные остатки на счетах, активные резервы, ACTIVE обязательства и вычисленное «Свободно». Не считай ожидаемые поступления уже имеющимися деньгами. Резервы и обязательства сейчас не связаны друг с другом автоматически, поэтому не объединяй их без явных данных. Дай спокойный практический план без морализаторства: что обязательно оплатить, сколько реально свободно, где безопасно сократить расходы, и что можно направить в резервы. Также учти питание, задачи, нагрузку и ежедневные отчёты. В конце дай структурированные блоки 'План на неделю', 'Совет на сегодня', 'Финансовые советы', 'Советы по питанию', 'Советы по задачам'.");
   return lines.join('\n');
 }
 
@@ -3394,7 +3193,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.8.21-dev')
+    navigator.serviceWorker.register('./service-worker.js?v=0.12.0-finance-v2-part2-20260807')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

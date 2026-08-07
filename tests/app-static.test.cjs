@@ -1,5 +1,6 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const RELEASE='0.12.0-finance-v2-part2-20260807';
 const app=fs.readFileSync('js/app.js','utf8');
 const index=fs.readFileSync('index.html','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');
@@ -13,9 +14,9 @@ assert.ok(app.includes('function renderFinanceV2AccountCard'),'Finance v2 accoun
 assert.ok(app.includes('Последние операции'),'Finance v2 recent operations missing');
 
 assert.ok(app.includes('function renderFinanceHistoryV2'),'unified history missing');
-assert.ok(app.includes("const APP_VERSION = '0.11.1-finance-v2-part1'"),'app version mismatch');
+assert.ok(app.includes("const APP_VERSION = '0.12.0-finance-v2-part2'"),'app version mismatch');
 assert.equal(index.includes('finance-module-v1.js'),false,'legacy finance module reference remains');
-assert.ok(index.includes('0.11.1-finance-v2-part1-report-20260807'),'release shell mismatch');
+assert.ok(index.includes('0.12.0-finance-v2-part2-20260807'),'release shell mismatch');
 const sw=fs.readFileSync('service-worker.js','utf8');
 assert.ok(sw.includes('js/finance-core.js'),'service worker must cache finance core');
 assert.equal(sw.includes('finance-module-v1.js'),false,'service worker still references Finance v1');
@@ -25,10 +26,13 @@ assert.equal(fs.existsSync('js/finance-module-v1.js'),false,'Finance v1 file mus
 const reportStart=app.indexOf('function buildGptReport()');
 const reportEnd=app.indexOf('function ',reportStart+20);
 const reportFn=app.slice(reportStart,reportEnd>reportStart?reportEnd:app.length);
-assert.ok(reportFn.includes('getFinanceTotalBalance()'),'GPT report must use Finance v2 total balance');
+assert.ok(reportFn.includes('getFinanceCoverage()'),'GPT report must use Finance v2 Part2 coverage including total balance');
 assert.ok(reportFn.includes('accountLines'),'GPT report must include account breakdown');
 assert.equal(reportFn.includes('context.availableBalance'),false,'GPT report must not use legacy availableBalance');
-assert.ok(reportFn.includes('Legacy-резерв'),'legacy reserve must be explicitly labeled');
+assert.ok(reportFn.includes('getFinanceCoverage()'),'GPT report must use Part2 coverage');
+assert.ok(reportFn.includes('getActiveReserves'),'GPT report must include active reserves');
+assert.ok(reportFn.includes('getActiveObligations'),'GPT report must include active obligations');
+assert.ok(reportFn.includes('НЕ входят в «Свободно»'),'planned income must be marked as non-existing money');
 
 
 // Finance v2 Part 2 reserve UI must use the central core API.
@@ -70,3 +74,22 @@ assert.ok(app.includes('function renderFinanceAccountsScreen'),'accounts must be
 assert.ok(app.includes('function renderFinanceCategoriesScreen'),'category management screen missing');
 assert.ok(app.includes('data-finance-analytics-open'),'analytics/history destination missing');
 assert.ok(app.includes('Сверка баланса'),'reconciliation status row missing');
+
+
+// Finance v2 Part2 final architecture and release hygiene.
+assert.equal(app.includes("$$('[data-finance-form]', root)"),false,'legacy Finance v1 expense binder remains');
+assert.equal(app.includes("$$('[data-finance-context-form]', root)"),false,'legacy balance context binder remains');
+assert.equal(app.includes("$$('[data-finance-plan-complete]', root)"),false,'legacy plan completion binder remains');
+assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 override module must not exist');
+assert.equal(fs.existsSync('js/finance-module-v2.js'),false,'Finance Part2 override file must not exist');
+assert.ok(app.includes(`service-worker.js?v=0.12.0-finance-v2-part2-20260807`),'direct service worker registration must use current release');
+assert.ok(sw.includes(`const RELEASE='0.12.0-finance-v2-part2-20260807'`),'service worker release mismatch');
+const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
+const version=JSON.parse(fs.readFileSync('version.json','utf8'));
+assert.equal(manifest.version,RELEASE,'manifest release mismatch');
+assert.equal(version.release,RELEASE,'version.json release mismatch');
+const financeRenderStart=app.indexOf('function renderFinance()');
+const financeRenderEnd=app.indexOf('function ',financeRenderStart+20);
+const financeRender=app.slice(financeRenderStart,financeRenderEnd>financeRenderStart?financeRenderEnd:app.length);
+const ordered=['renderFinanceMoneyNowCard()','renderFinanceQuickActions()','renderFinanceMonthCard()','renderFinanceObligationsCompact()','renderFinanceReservesCompact()','Последние операции','renderFinanceManagementLinks()'];
+let last=-1;for(const marker of ordered){const pos=financeRender.indexOf(marker);assert.ok(pos>last,`Finance main order broken at ${marker}`);last=pos;}

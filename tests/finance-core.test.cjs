@@ -207,3 +207,68 @@ test('reserve and obligation normalization enforces non-negative reserve and val
   assert.equal(obligation.recurrence,'MONTHLY');
   assert.equal(obligation.status,'ACTIVE');
 });
+
+
+test('reserve API changes allocation but never account balances',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  f=core.createTransaction(f,{id:'money-r',type:'ADJUSTMENT',amount:50000,accountId:'a1',date:'2026-08-07'}).finance;
+  const total=core.getTotalBalance(f);const free0=core.getFreeMoney(f,{fromDate:'2026-08-07'});
+  let r=core.createReserve(f,{id:'r1',name:'Машина',amount:10000,targetAmount:110000},{now:'2026-08-07T10:00:00.000Z',fromDate:'2026-08-07'});assert.equal(r.ok,true);f=r.finance;
+  assert.equal(core.getTotalBalance(f),total);assert.equal(core.getTotalReservedAmount(f),10000);assert.equal(core.getFreeMoney(f,{fromDate:'2026-08-07'}),free0-10000);
+  r=core.adjustReserveAmount(f,'r1',5000,{now:'2026-08-07T11:00:00.000Z',fromDate:'2026-08-07'});assert.equal(r.ok,true);f=r.finance;assert.equal(core.getTotalReservedAmount(f),15000);
+  r=core.adjustReserveAmount(f,'r1',-3000,{now:'2026-08-07T12:00:00.000Z',fromDate:'2026-08-07'});assert.equal(r.ok,true);f=r.finance;assert.equal(core.getTotalReservedAmount(f),12000);
+  r=core.archiveReserve(f,'r1');assert.equal(r.ok,true);f=r.finance;assert.equal(core.getTotalReservedAmount(f),0);assert.equal(core.getTotalBalance(f),total);
+});
+
+test('reserve API rejects negative amounts and new over-allocation',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:1000,accountId:'a1',date:'2026-08-07'}).finance;
+  assert.equal(core.createReserve(f,{name:'bad',amount:-1},{fromDate:'2026-08-07'}).error,'INVALID_RESERVE_AMOUNT');
+  assert.equal(core.createReserve(f,{name:'too much',amount:1500},{fromDate:'2026-08-07'}).error,'INSUFFICIENT_FREE_MONEY');
+  let r=core.createReserve(f,{id:'r',name:'ok',amount:500},{fromDate:'2026-08-07'});f=r.finance;
+  assert.equal(core.adjustReserveAmount(f,'r',-600,{fromDate:'2026-08-07'}).error,'INVALID_RESERVE_AMOUNT');
+});
+
+test('legacy reserve explicit import is idempotent and creates no transaction',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:10000,accountId:'a1',date:'2026-08-07'}).finance;
+  f.migration={...f.migration,part2Checkpoint:core.PART2_MIGRATION_CHECKPOINT,legacyReserveStatus:'REVIEW_REQUIRED',legacyReserveAmount:15000};
+  const txCount=f.transactions.length;const total=core.getTotalBalance(f);let r=core.importLegacyReserve(f,{now:'2026-08-07T10:00:00.000Z'});assert.equal(r.ok,true);assert.equal(r.imported,true);f=r.finance;
+  assert.equal(f.transactions.length,txCount);assert.equal(core.getTotalBalance(f),total);assert.equal(core.getTotalReservedAmount(f),15000);assert.equal(f.migration.legacyReserveStatus,'MIGRATED');
+  r=core.importLegacyReserve(f,{now:'2026-08-08T10:00:00.000Z'});assert.equal(r.ok,true);assert.equal(r.imported,false);assert.equal(r.finance.reserves.length,1);
+});
+
+test('active obligation affects free money but not account balance',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:10000,accountId:'a1',date:'2026-08-07'}).finance;
+  const total=core.getTotalBalance(f);let r=core.createObligation(f,{id:'o1',name:'Интернет',amount:850,dueDate:'2026-08-12',recurrence:'NONE'},{now:'2026-08-07T10:00:00.000Z',fromDate:'2026-08-07'});assert.equal(r.ok,true);f=r.finance;
+  assert.equal(core.getTotalBalance(f),total);assert.equal(core.getUpcomingObligationsTotal(f,{fromDate:'2026-08-07'}),850);assert.equal(core.getFreeMoney(f,{fromDate:'2026-08-07'}),9150);
+});
+
+test('payObligation creates exactly one EXPENSE and avoids double subtraction',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:10000,accountId:'a1',date:'2026-08-07'}).finance;
+  f=core.createObligation(f,{id:'o1',name:'Интернет',amount:850,dueDate:'2026-08-12'},{fromDate:'2026-08-07'}).finance;const freeBefore=core.getFreeMoney(f,{fromDate:'2026-08-07'});const txBefore=f.transactions.length;
+  const r=core.payObligation(f,'o1',{accountId:'a1',categoryId:'home',date:'2026-08-12',now:'2026-08-12T09:00:00.000Z',idFactory:p=>`${p}_paid`});assert.equal(r.ok,true);f=r.finance;
+  assert.equal(f.transactions.length,txBefore+1);assert.equal(f.transactions.filter(x=>x.type==='EXPENSE').length,1);assert.equal(core.getAccountBalance(f,'a1'),9150);
+  assert.equal(f.obligations.find(x=>x.id==='o1').status,'PAID');assert.equal(core.getUpcomingObligationsTotal(f,{fromDate:'2026-08-07'}),0);assert.equal(core.getFreeMoney(f,{fromDate:'2026-08-07'}),freeBefore);
+});
+
+test('linking existing expense creates no second expense and deletion reactivates obligation',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:10000,accountId:'a1',date:'2026-08-07'}).finance;
+  f=core.createObligation(f,{id:'o1',name:'Связь',amount:350,dueDate:'2026-08-21'},{fromDate:'2026-08-07'}).finance;f=core.createTransaction(f,{id:'e-existing',type:'EXPENSE',amount:400,accountId:'a1',categoryId:'home',date:'2026-08-20'}).finance;const txCount=f.transactions.length;
+  let r=core.linkObligationToTransaction(f,'o1','e-existing',{now:'2026-08-20T10:00:00.000Z'});assert.equal(r.ok,true);f=r.finance;assert.equal(f.transactions.length,txCount);assert.equal(f.obligations.find(x=>x.id==='o1').status,'PAID');assert.equal(f.obligations.find(x=>x.id==='o1').amount,350);
+  r=core.updateTransaction(f,'e-existing',{amount:450},{now:'2026-08-20T11:00:00.000Z'});assert.equal(r.ok,true);f=r.finance;assert.equal(f.obligations.find(x=>x.id==='o1').amount,350);assert.equal(f.transactions.length,txCount);
+  r=core.deleteTransaction(f,'e-existing',{now:'2026-08-20T12:00:00.000Z'});assert.equal(r.ok,true);f=r.finance;assert.equal(f.obligations.find(x=>x.id==='o1').status,'ACTIVE');assert.equal(f.obligations.find(x=>x.id==='o1').linkedTransactionId,null);
+});
+
+test('monthly obligation creates only next instance and rolls it back if payment expense is deleted',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:20000,accountId:'a1',date:'2026-08-07'}).finance;
+  f=core.createObligation(f,{id:'monthly',name:'Интернет',amount:850,dueDate:'2026-08-31',recurrence:'MONTHLY'},{fromDate:'2026-08-07'}).finance;
+  let r=core.payObligation(f,'monthly',{accountId:'a1',categoryId:'home',date:'2026-08-31',now:'2026-08-31T10:00:00.000Z',idFactory:p=>p==='txn'?'paid-monthly':'next-monthly'});assert.equal(r.ok,true);f=r.finance;
+  const old=f.obligations.find(x=>x.id==='monthly');assert.equal(old.status,'PAID');assert.equal(f.obligations.length,2);const next=f.obligations.find(x=>x.recurrenceParentId==='monthly');assert.equal(next.dueDate,'2026-09-30');assert.equal(next.status,'ACTIVE');
+  r=core.deleteTransaction(f,old.linkedTransactionId,{now:'2026-08-31T11:00:00.000Z'});assert.equal(r.ok,true);f=r.finance;assert.equal(f.obligations.length,1);assert.equal(f.obligations[0].status,'ACTIVE');assert.equal(f.obligations[0].nextObligationId,null);
+});
+
+test('coverage selector uses the same free-money calculation',()=>{
+  let f=core.createEmptyFinance();f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;f=core.createTransaction(f,{id:'m',type:'ADJUSTMENT',amount:5000,accountId:'a1',date:'2026-08-07'}).finance;
+  f=core.createReserve(f,{id:'r1',name:'Подушка',amount:2000},{fromDate:'2026-08-07'}).finance;f=core.createObligation(f,{id:'o1',name:'Коммуналка',amount:2500,dueDate:'2026-08-20'},{fromDate:'2026-08-07'}).finance;
+  const c=core.getObligationCoverage(f,{fromDate:'2026-08-07'});assert.equal(c.free,core.getFreeMoney(f,{fromDate:'2026-08-07'}));assert.equal(c.covered,true);assert.equal(c.shortfall,0);
+});

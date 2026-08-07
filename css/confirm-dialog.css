@@ -1,15 +1,19 @@
-/* TSB Hub 0.10.7 — confirmation dialogs: actions stay at the bottom, symmetric and explicit. */
-.edit-dialog:has([data-confirm-no]) .modal-card {
+/* TSB Hub 0.10.8 — unified two-button modal actions. */
+
+/* Shared bottom action row for confirm dialogs and standard edit dialogs. */
+.edit-dialog:has([data-confirm-no]) .modal-card,
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) {
   display: grid;
   gap: 14px;
   padding-bottom: 16px !important;
 }
 
-.edit-dialog:has([data-confirm-no]) .modal-actions {
+.edit-dialog:has([data-confirm-no]) .modal-actions,
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions {
   position: static !important;
   inset: auto !important;
   width: 100% !important;
-  margin-top: 4px !important;
+  margin-top: 6px !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   gap: 10px !important;
@@ -17,9 +21,11 @@
   justify-content: stretch !important;
 }
 
-.edit-dialog:has([data-confirm-no]) .modal-actions > button {
+.edit-dialog:has([data-confirm-no]) .modal-actions > button,
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions > button {
   width: 100% !important;
   min-width: 0 !important;
+  max-width: none !important;
   min-height: 44px !important;
   height: 44px !important;
   padding: 0 14px !important;
@@ -27,28 +33,53 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: .9rem !important;
   font-weight: 800 !important;
   line-height: 1 !important;
 }
 
-.edit-dialog:has([data-confirm-no]) [data-confirm-no] {
+/* Left action: cancel. This overrides the old mobile rule that hid it. */
+.edit-dialog:has([data-confirm-no]) [data-confirm-no],
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions [data-modal-cancel] {
   grid-column: 1 !important;
+  display: inline-flex !important;
+  font-size: .9rem !important;
   background: rgba(255,255,255,.035) !important;
 }
 
-.edit-dialog:has([data-confirm-no]) [data-confirm-yes] {
+/* Right action: always shown as “Подтвердить”. */
+.edit-dialog:has([data-confirm-no]) [data-confirm-yes],
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions button[type="submit"] {
   grid-column: 2 !important;
+  display: inline-flex !important;
+  font-size: 0 !important;
 }
 
+.edit-dialog:has([data-confirm-no]) [data-confirm-yes]::after,
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions button[type="submit"]::after {
+  content: 'Подтвердить' !important;
+  display: inline !important;
+  font-size: .9rem !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+/* Destructive confirmations keep the red meaning, but the label stays neutral. */
 .edit-dialog:has([data-confirm-no]) [data-confirm-yes].danger-button {
   background: rgba(239,68,68,.18) !important;
   border-color: rgba(248,113,113,.48) !important;
   color: #fecaca !important;
 }
 
+/* Editing confirmation: subtle positive accent instead of the old round check icon. */
+.edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions .primary-button[type="submit"] {
+  background: rgba(34,197,94,.18) !important;
+  border-color: rgba(74,222,128,.42) !important;
+  color: #dcfce7 !important;
+}
+
 @media (max-width: 430px) {
-  .edit-dialog:has([data-confirm-no]) .modal-actions {
+  .edit-dialog:has([data-confirm-no]) .modal-actions,
+  .edit-dialog .edit-form:has(.modal-actions [data-modal-cancel]) .modal-actions {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   }
 }

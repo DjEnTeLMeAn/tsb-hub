@@ -16,8 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply stage G
-        run: python3 scripts/finance-v2-part2-stage-g.py
+      - name: Apply stage G retry
+        run: python3 scripts/finance-v2-part2-stage-g-retry.py
       - name: Test
         run: npm test
       - name: Lint
@@ -33,7 +33,7 @@ jobs:
           grep -q "0.12.0-finance-v2-part2-20260807" version.json
       - name: Commit stage G
         run: |
-          rm -f scripts/finance-v2-part2-stage-g.py .github/workflows/finance-v2-part2-stage-g.yml
+          rm -f scripts/finance-v2-part2-stage-g.py scripts/finance-v2-part2-stage-g-retry.py .github/workflows/finance-v2-part2-stage-g.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A

@@ -1,4 +1,4 @@
-const APP_VERSION = '0.11.0-finance-v2-part1';
+const APP_VERSION = '0.11.1-finance-v2-part1';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -902,7 +902,7 @@ function getLocalInsights(iso = state.selectedDate) {
   const finance = getFinance(iso);
   const financeSummary = getFinanceSummary(iso);
   const context = getFinanceContext();
-  const balance = Number(context.availableBalance || 0);
+  const balance = getFinanceTotalBalance();
   const selectedIsFuture = iso > todayISO;
   const selectedIsTodayOrPast = iso <= todayISO;
   const pendingTasks = tasks.filter(task => !task.done && !task.failed && !task.dismissed).length;
@@ -3034,7 +3034,10 @@ function buildGptReport() {
     : '  - операций пока нет';
   const lines = [`Отчёт TSB Hub за неделю ${shortDate(monday)} — ${shortDate(addDays(monday, 6))}`];
   const goalLines = context.savingGoal ? context.savingGoal.split('\n').map(line => `  - ${line}`).join('\n') : '  - не указано';
-  lines.push(`\nФинансовый контекст:\n  Доступно сейчас: ${context.availableBalance ? formatRub(context.availableBalance) : 'не указано'}\n  Активы / резерв: ${context.reserveBalance ? formatRub(context.reserveBalance) : 'не указано'}\n  Финансовые цели:\n${goalLines}\n  Плановые поступления:\n${incomeLines}\n  Обязательные расходы:\n${obligationLines}\n  История операций / корректировки:\n${operationLines}`);
+  const accountLines = getFinanceAccounts().length ? getFinanceAccounts().map(account => `  - ${account.name}: ${formatRub(getFinanceAccountBalance(account.id))}`).join('\n') : '  - нет активных счетов';
+  lines.push(`\nФинансовый контекст:\n  Всего на счетах: ${formatRub(getFinanceTotalBalance())}\
+  Счета:\
+${accountLines}\n  Legacy-резерв (не включён в счета): ${context.reserveBalance ? formatRub(context.reserveBalance) : 'не указано'}\n  Финансовые цели:\n${goalLines}\n  Плановые поступления:\n${incomeLines}\n  Обязательные расходы:\n${obligationLines}\n  История операций / корректировки:\n${operationLines}`);
   const currentPlan = getGptPlan();
   if (currentPlan.text) {
     lines.push(`\nТекущий план от GPT на эту неделю уже сохранён в приложении:\n${currentPlan.text}`);

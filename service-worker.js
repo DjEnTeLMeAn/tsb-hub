@@ -1,4 +1,4 @@
-const RELEASE='0.12.0-finance-v2-part2-20260807';
+const RELEASE='0.13.0-finance-v2-complete-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const RELEASE='0.12.0-finance-v2-part2-20260807';
+const RELEASE='0.13.0-finance-v2-complete-20260807';
 const app=fs.readFileSync('js/app.js','utf8');
 const index=fs.readFileSync('index.html','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');
@@ -14,9 +14,9 @@ assert.ok(app.includes('function renderFinanceV2AccountCard'),'Finance v2 accoun
 assert.ok(app.includes('Последние операции'),'Finance v2 recent operations missing');
 
 assert.ok(app.includes('function renderFinanceHistoryV2'),'unified history missing');
-assert.ok(app.includes("const APP_VERSION = '0.12.0-finance-v2-part2'"),'app version mismatch');
+assert.ok(app.includes("const APP_VERSION = '0.13.0-finance-v2-complete'"),'app version mismatch');
 assert.equal(index.includes('finance-module-v1.js'),false,'legacy finance module reference remains');
-assert.ok(index.includes('0.12.0-finance-v2-part2-20260807'),'release shell mismatch');
+assert.ok(index.includes('0.13.0-finance-v2-complete-20260807'),'release shell mismatch');
 const sw=fs.readFileSync('service-worker.js','utf8');
 assert.ok(sw.includes('js/finance-core.js'),'service worker must cache finance core');
 assert.equal(sw.includes('finance-module-v1.js'),false,'service worker still references Finance v1');
@@ -81,8 +81,8 @@ assert.equal(app.includes("$$('[data-finance-context-form]', root)"),false,'lega
 assert.equal(app.includes("$$('[data-finance-plan-complete]', root)"),false,'legacy plan completion binder remains');
 assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 override module must not exist');
 assert.equal(fs.existsSync('js/finance-module-v2.js'),false,'Finance Part2 override file must not exist');
-assert.ok(app.includes(`service-worker.js?v=0.12.0-finance-v2-part2-20260807`),'direct service worker registration must use current release');
-assert.ok(sw.includes(`const RELEASE='0.12.0-finance-v2-part2-20260807'`),'service worker release mismatch');
+assert.ok(app.includes(`service-worker.js?v=0.13.0-finance-v2-complete-20260807`),'direct service worker registration must use current release');
+assert.ok(sw.includes(`const RELEASE='0.13.0-finance-v2-complete-20260807'`),'service worker release mismatch');
 const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
 const version=JSON.parse(fs.readFileSync('version.json','utf8'));
 assert.equal(manifest.version,RELEASE,'manifest release mismatch');
@@ -141,3 +141,20 @@ const mutationStart=app.indexOf('function applyFinanceMutation');const mutationE
 assert.ok(mutationFn.includes("state.activeTab === 'finance'"),'Finance local render branch missing');
 assert.ok(mutationFn.includes('saveData(app,true)'),'Finance local mutation must persist data');
 assert.ok(mutationFn.includes('renderFinance()'),'Finance local mutation must redraw Finance only');
+
+
+// Finance v2 complete: architecture and daily-input invariants.
+assert.ok(app.includes("const STORAGE_KEY = 'tsb_hub_data_v1'"),'storage key must remain unchanged');
+const coreText=fs.readFileSync('js/finance-core.js','utf8');
+assert.ok(coreText.includes('const FINANCE_SCHEMA_VERSION=3'),'Finance schema must remain v3');
+assert.ok(coreText.includes("RECONCILIATION:'RECONCILIATION'"),'reconciliation system kind missing');
+const quickStart=app.indexOf('function renderFinanceQuickForm');
+const quickEnd=app.indexOf('function ',quickStart+20);
+const quickFn=app.slice(quickStart,quickEnd>quickStart?quickEnd:app.length);
+assert.ok(quickFn.includes('name="amount"'),'quick expense amount missing');
+assert.ok(quickFn.includes('name="categoryId"'),'quick expense category missing');
+assert.equal(quickFn.includes('name="accountId"'),false,'quick daily expense must not require account selection');
+assert.equal(quickFn.includes('reserveId'),false,'quick daily expense must not require reserve allocation');
+assert.equal(quickFn.includes('obligationId'),false,'quick daily expense must not require obligation selection');
+assert.equal(index.includes('finance-module-v3.js'),false,'Finance v2 complete must not add an override module');
+assert.equal(fs.existsSync('js/finance-module-v3.js'),false,'Finance v2 complete override file must not exist');

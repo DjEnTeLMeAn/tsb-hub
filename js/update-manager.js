@@ -1,7 +1,7 @@
-// TSB Hub v0.12.0-finance-v2-part2 — single PWA update authority.
+// TSB Hub v0.13.0-finance-v2-complete — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.12.0-finance-v2-part2-20260807';
+  const RELEASE='0.13.0-finance-v2-complete-20260807';
   const VERSION_URL='./version.json';
   const RELOAD_KEY='tsb_hub_reload_'+RELEASE;
   const nativeRegister='serviceWorker' in navigator?navigator.serviceWorker.register.bind(navigator.serviceWorker):null;

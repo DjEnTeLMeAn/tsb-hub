@@ -1,4 +1,4 @@
-const APP_VERSION = '0.12.0-finance-v2-part2';
+const APP_VERSION = '0.13.0-finance-v2-complete';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -1914,7 +1914,7 @@ function financeHistoryDateLabel(iso) {
 }
 function financeHistorySummaryHTML(rows) {
   const expenses=rows.filter(x=>x.type==='EXPENSE');const incomes=rows.filter(x=>x.type==='INCOME');
-  const expense=incomes.length>=0?expenses.reduce((s,x)=>s+moneyNumber(x.amount),0):0;const income=incomes.reduce((s,x)=>s+moneyNumber(x.amount),0);const difference=income-expense;
+  const expense=expenses.reduce((s,x)=>s+moneyNumber(x.amount),0);const income=incomes.reduce((s,x)=>s+moneyNumber(x.amount),0);const difference=income-expense;
   return `<div class="finance-v2-history-summary-grid"><div><span>Поступления</span><strong>${formatRub(income)}</strong></div><div><span>Расходы</span><strong>${formatRub(expense)}</strong></div><div><span>Разница</span><strong>${difference>0?'+':''}${formatRub(difference)}</strong></div><div><span>Операций</span><strong>${rows.length}</strong></div></div><p class="muted finance-v2-history-summary-note">TRANSFER и ADJUSTMENT не считаются доходом или расходом.</p>`;
 }
 function financeHistoryGroupsHTML(rows) {
@@ -3315,7 +3315,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.12.0-finance-v2-part2-20260807')
+    navigator.serviceWorker.register('./service-worker.js?v=0.13.0-finance-v2-complete-20260807')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

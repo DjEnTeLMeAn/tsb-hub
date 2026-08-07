@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/*.test.cjs",
-    "lint": "node --check js/finance-core.js",
-    "build": "node --check js/finance-core.js"
+    "lint": "node --check js/finance-core.js && node --check js/app.js",
+    "build": "node tests/app-static.test.cjs"
   }
 }

@@ -66,7 +66,7 @@ function createDefaultData() {
   return {
     meta: {
       appVersion: APP_VERSION,
-      dataVersion: 2,
+      dataVersion: 3,
       createdAt: now,
       lastModified: now,
       lastExported: '',
@@ -76,14 +76,15 @@ function createDefaultData() {
     tasks: {},
     health: {},
     dailyReports: {},
-    finance: {},
+    finance: TSBFinanceCore.createEmptyFinance(now),
     financeContext: {
       availableBalance: '',
       reserveBalance: '',
       savingGoal: '',
       incomes: [],
       obligations: [],
-      operations: []
+      operations: [],
+      financeV2Legacy: true
     },
     gptPlans: {},
     importantDates: [],
@@ -112,34 +113,50 @@ function loadData() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      return normalizeData(JSON.parse(raw));
+      const normalized = normalizeData(JSON.parse(raw));
+      saveData(normalized, false);
+      return normalized;
     } catch (error) {
-      console.warn('Не удалось прочитать новое хранилище, создана пустая база.', error);
+      console.warn('Не удалось прочитать хранилище, создана пустая база.', error);
     }
   }
   const data = createDefaultData();
   migrateOldLocalStorage(data);
-  saveData(data, false);
-  return data;
+  const normalized = normalizeData(data);
+  saveData(normalized, false);
+  return normalized;
 }
 
 function normalizeData(data) {
   const defaults = createDefaultData();
   data = data || {};
   if (!data.meta) data.meta = {};
+  const now = new Date().toISOString();
+  const migration = TSBFinanceCore.migrateLegacyState({
+    finance: data.finance,
+    financeContext: data.financeContext,
+    archives: data.archives,
+    now,
+    idFactory: uid
+  });
+  let finance = migration.finance;
+  if (!finance.accounts.length) {
+    const created = TSBFinanceCore.createAccount(finance, { id: 'account_main', name: 'Основной счёт', isDefault: true }, { now, idFactory: uid });
+    if (created.ok) finance = created.finance;
+  }
   return {
     ...defaults,
     ...data,
-    meta: { ...defaults.meta, ...(data.meta || {}), appVersion: APP_VERSION, dataVersion: defaults.meta.dataVersion },
+    meta: { ...defaults.meta, ...(data.meta || {}), appVersion: APP_VERSION, dataVersion: 3 },
     tasks: data.tasks || {},
     health: data.health || {},
     dailyReports: normalizeDailyReports(data.dailyReports),
-    finance: normalizeFinance(data.finance),
-    financeContext: normalizeFinanceContext(data.financeContext),
+    finance,
+    financeContext: normalizeFinanceContext(migration.financeContext),
     gptPlans: normalizeGptPlans(data.gptPlans),
     importantDates: Array.isArray(data.importantDates) ? data.importantDates : [],
     settings: { ...defaults.settings, ...(data.settings || {}) },
-    archives: data.archives || {}
+    archives: migration.archives || {}
   };
 }
 
@@ -407,24 +424,7 @@ function getDailyReportChipText(iso = state.selectedDate) {
   return `${self}/${drive}`;
 }
 function normalizeFinance(value) {
-  if (!value || typeof value !== 'object') return {};
-  const result = {};
-  Object.entries(value).forEach(([iso, day]) => {
-    const expenses = Array.isArray(day?.expenses) ? day.expenses : [];
-    result[iso] = {
-      noExpenses: Boolean(day?.noExpenses),
-      expenses: expenses.map(expense => ({
-        id: expense.id || uid('exp'),
-        amount: normalizeMoneyInput(expense.amount || expense.sum || ''),
-        category: normalizeFinanceCategory(expense.category),
-        reason: normalizeFinanceReason(expense.reason),
-        comment: expense.comment || '',
-        time: expense.time || '',
-        createdAt: expense.createdAt || new Date().toISOString()
-      })).filter(expense => expense.amount)
-    };
-  });
-  return result;
+  return TSBFinanceCore.normalizeFinance(value);
 }
 
 
@@ -663,16 +663,169 @@ function openGptAdviceDialog(kind = 'today') {
   });
 }
 
+function getFinanceStateV2() {
+  app.finance = TSBFinanceCore.normalizeFinance(app.finance);
+  return app.finance;
+}
+function setFinanceStateV2(finance) {
+  app.finance = TSBFinanceCore.normalizeFinance(finance);
+  return app.finance;
+}
+function getFinanceAccounts(includeArchived = false) {
+  return getFinanceStateV2().accounts.filter(account => includeArchived || (!account.archived && account.active));
+}
+function getDefaultFinanceAccount() {
+  return TSBFinanceCore.getDefaultAccount(getFinanceStateV2());
+}
+function getFinanceAccountBalance(accountId) {
+  return TSBFinanceCore.getAccountBalance(getFinanceStateV2(), accountId);
+}
+function getFinanceTotalBalance() {
+  return TSBFinanceCore.getTotalBalance(getFinanceStateV2());
+}
+function getFinanceTransactions(filters = {}) {
+  return TSBFinanceCore.getTransactions(getFinanceStateV2(), filters);
+}
+function getFinanceTransaction(id) {
+  return getFinanceStateV2().transactions.find(transaction => transaction.id === id) || null;
+}
+function getFinanceCategoryById(id) {
+  return getFinanceStateV2().categories.find(item => item.id === id) || getFinanceStateV2().categories.find(item => item.id === 'other') || null;
+}
+function getFinanceIncomeTypeById(id) {
+  return getFinanceStateV2().incomeTypes.find(item => item.id === id) || getFinanceStateV2().incomeTypes.find(item => item.id === 'other') || null;
+}
+function financeCategoryOptions(selected = '') {
+  return getFinanceStateV2().categories.filter(item => item.active && !item.archived).map(item => ({ value: item.id, label: item.name, selected: item.id === selected }));
+}
+function financeIncomeTypeOptions(selected = '') {
+  return getFinanceStateV2().incomeTypes.filter(item => item.active && !item.archived).map(item => ({ value: item.id, label: item.name, selected: item.id === selected }));
+}
+function financeAccountOptions(selected = '') {
+  return getFinanceAccounts().map(account => ({ value: account.id, label: account.name, selected: account.id === selected }));
+}
+function financeOptionHTML(options, selected = '') {
+  return options.map(item => `<option value="${escapeHTML(item.value)}" ${String(item.value) === String(selected) ? 'selected' : ''}>${escapeHTML(item.label)}</option>`).join('');
+}
+function applyFinanceMutation(result, message = '') {
+  if (!result?.ok) {
+    if (typeof showToast === 'function') showToast(result?.error === 'SYSTEM_LOCKED' ? 'Системную операцию нельзя изменить' : 'Не удалось изменить финансы');
+    return false;
+  }
+  setFinanceStateV2(result.finance);
+  markChanged();
+  if (message && typeof showToast === 'function') showToast(message);
+  return true;
+}
+function financeTransactionLegacyView(transaction) {
+  return {
+    id: transaction.id,
+    amount: String(transaction.amount),
+    category: transaction.categoryId || 'other',
+    reason: '',
+    comment: transaction.description || '',
+    detail: transaction.description || '',
+    time: transaction.time || '',
+    createdAt: transaction.createdAt || '',
+    updatedAt: transaction.updatedAt || ''
+  };
+}
+async function openFinanceV2TransactionEditor(id) {
+  const transaction = getFinanceTransaction(id);
+  if (!transaction || TSBFinanceCore.isSystemLocked(transaction)) return;
+  const accounts = financeAccountOptions(transaction.accountId || transaction.fromAccountId || '');
+  let fields = [];
+  if (transaction.type === 'EXPENSE') {
+    fields = [
+      { name: 'amount', label: 'Сумма', value: transaction.amount },
+      { name: 'categoryId', label: 'Категория', type: 'select', value: transaction.categoryId, options: financeCategoryOptions(transaction.categoryId) },
+      { name: 'description', label: 'Описание', type: 'textarea', value: transaction.description || '', placeholder: 'Необязательно' },
+      { name: 'time', label: 'Время', type: 'time', value: transaction.time || '' },
+      { name: 'accountId', label: 'Счёт', type: 'select', value: transaction.accountId, options: accounts }
+    ];
+  } else if (transaction.type === 'INCOME') {
+    fields = [
+      { name: 'amount', label: 'Сумма', value: transaction.amount },
+      { name: 'incomeTypeId', label: 'Тип поступления', type: 'select', value: transaction.incomeTypeId, options: financeIncomeTypeOptions(transaction.incomeTypeId) },
+      { name: 'description', label: 'Описание', type: 'textarea', value: transaction.description || '', placeholder: 'Необязательно' },
+      { name: 'time', label: 'Время', type: 'time', value: transaction.time || '' },
+      { name: 'accountId', label: 'Счёт', type: 'select', value: transaction.accountId, options: accounts }
+    ];
+  } else if (transaction.type === 'TRANSFER') {
+    fields = [
+      { name: 'amount', label: 'Сумма', value: transaction.amount },
+      { name: 'fromAccountId', label: 'Откуда', type: 'select', value: transaction.fromAccountId, options: financeAccountOptions(transaction.fromAccountId) },
+      { name: 'toAccountId', label: 'Куда', type: 'select', value: transaction.toAccountId, options: financeAccountOptions(transaction.toAccountId) },
+      { name: 'date', label: 'Дата', type: 'date', value: transaction.date },
+      { name: 'time', label: 'Время', type: 'time', value: transaction.time || '' }
+    ];
+  } else {
+    return;
+  }
+  const result = await openEditDialog({ title: transaction.type === 'EXPENSE' ? 'Изменить трату' : transaction.type === 'INCOME' ? 'Изменить поступление' : 'Изменить перевод', fields, submitText: 'Подтвердить' });
+  if (!result) return;
+  const patch = { ...result };
+  if (patch.amount !== undefined) patch.amount = normalizeMoneyInput(patch.amount);
+  applyFinanceMutation(TSBFinanceCore.updateTransaction(getFinanceStateV2(), id, patch), 'Операция изменена');
+}
+async function deleteFinanceV2Transaction(id) {
+  const transaction = getFinanceTransaction(id);
+  if (!transaction || TSBFinanceCore.isSystemLocked(transaction)) return;
+  const ok = await openConfirmDialog({ title: 'Удалить операцию?', message: 'Её влияние на баланс будет полностью отменено.', confirmText: 'Подтвердить', danger: true });
+  if (!ok) return;
+  applyFinanceMutation(TSBFinanceCore.deleteTransaction(getFinanceStateV2(), id), 'Операция удалена');
+}
+function bindFinanceV2GlobalEvents() {
+  if (window.__tsbFinanceV2EventsBound) return;
+  window.__tsbFinanceV2EventsBound = true;
+  document.addEventListener('submit', event => {
+    const form = event.target.closest?.('[data-finance-v2-expense-form]');
+    if (!form) return;
+    event.preventDefault();
+    const fd = new FormData(form);
+    const amount = normalizeMoneyInput(fd.get('amount'));
+    const account = getDefaultFinanceAccount();
+    if (!amount || !account) return;
+    const now = new Date();
+    const date = form.dataset.date || state.selectedDate || toISODate(now);
+    const transaction = {
+      type: 'EXPENSE', amount, accountId: account.id,
+      categoryId: normalizeFinanceCategory(fd.get('categoryId')),
+      date, time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+      description: ''
+    };
+    const result = TSBFinanceCore.createTransaction(getFinanceStateV2(), transaction, { idFactory: uid });
+    if (applyFinanceMutation(result, 'Трата добавлена')) form.reset();
+  });
+  document.addEventListener('click', event => {
+    const quick = event.target.closest?.('[data-finance-v2-quick-category]');
+    if (quick) {
+      const form = quick.closest('.today-input-card, .card')?.querySelector('[data-finance-v2-expense-form]');
+      const select = form?.querySelector('[name="categoryId"]');
+      if (select) select.value = quick.dataset.financeV2QuickCategory;
+      return;
+    }
+    const edit = event.target.closest?.('[data-finance-v2-edit]');
+    if (edit) { event.preventDefault(); openFinanceV2TransactionEditor(edit.dataset.financeV2Edit); return; }
+    const del = event.target.closest?.('[data-finance-v2-delete]');
+    if (del) { event.preventDefault(); deleteFinanceV2Transaction(del.dataset.financeV2Delete); }
+  });
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', bindFinanceV2GlobalEvents);
+  bindFinanceV2GlobalEvents();
+}
+
 function getFinance(iso = state.selectedDate) {
-  if (!app.finance) app.finance = {};
-  if (!app.finance[iso]) app.finance[iso] = { expenses: [], noExpenses: false };
-  if (!Array.isArray(app.finance[iso].expenses)) app.finance[iso].expenses = [];
-  app.finance[iso].noExpenses = Boolean(app.finance[iso].noExpenses);
-  return app.finance[iso];
+  return {
+    noExpenses: false,
+    expenses: getFinanceTransactions({ type: 'EXPENSE', dateFrom: iso, dateTo: iso }).map(financeTransactionLegacyView)
+  };
 }
 
 function normalizeFinanceCategory(value) {
-  return FINANCE_CATEGORIES.some(item => item.value === value) ? value : 'other';
+  const id = String(value || '').trim();
+  return getFinanceStateV2().categories.some(item => item.id === id && !item.archived) ? id : 'other';
 }
 
 function normalizeFinanceReason(value) {
@@ -680,7 +833,7 @@ function normalizeFinanceReason(value) {
 }
 
 function getFinanceCategoryLabel(value) {
-  return FINANCE_CATEGORIES.find(item => item.value === value)?.label || 'Другое';
+  return getFinanceCategoryById(value)?.name || 'Другое';
 }
 
 function getFinanceReasonLabel(value) {
@@ -701,14 +854,12 @@ function formatRub(value) {
 }
 
 function getFinanceSummary(iso = state.selectedDate) {
-  const expenses = getFinance(iso).expenses;
-  const sumBy = predicate => expenses.filter(predicate).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const total = expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-  const food = sumBy(item => item.category === 'food');
-  const transport = sumBy(item => item.category === 'transport');
-  const impulse = sumBy(item => ['impulse', 'stress', 'tired', 'lazy', 'reward'].includes(item.reason));
+  const expenses = getFinanceTransactions({ type: 'EXPENSE', dateFrom: iso, dateTo: iso });
+  const total = expenses.reduce((sum, item) => sum + moneyNumber(item.amount), 0);
+  const food = expenses.filter(item => item.categoryId === 'food').reduce((sum, item) => sum + moneyNumber(item.amount), 0);
+  const transport = expenses.filter(item => item.categoryId === 'transport').reduce((sum, item) => sum + moneyNumber(item.amount), 0);
   const other = Math.max(0, total - food - transport);
-  return { total, food, transport, other, impulse, count: expenses.length };
+  return { total, food, transport, other, impulse: 0, count: expenses.length };
 }
 
 
@@ -1036,8 +1187,8 @@ function renderToday() {
   const progress = getProgress();
   const important = getImportantPreview(3);
   const financeSummary = getFinanceSummary();
-  const financeContext = getFinanceContext();
-  const nextIncome = getNextIncome();
+  const financeAccount = getDefaultFinanceAccount();
+  const financeAccountBalance = financeAccount ? getFinanceAccountBalance(financeAccount.id) : 0;
   const gptPlan = getGptPlan();
   const pastTasks = app.settings.showOverdueOnToday ? getPendingPastTasksHTML() : '';
   const windowDays = Number(app.settings.pastTasksWindowDays || 14);
@@ -1067,7 +1218,7 @@ function renderToday() {
       </div>
       <div class="card today-input-card today-finance-card">
         <div class="card-title-row"><h2>Финансы дня</h2><button class="ghost-button small" data-tab-target="finance">Финансы</button></div>
-        <div class="finance-summary-line">Доступно: ${financeContext.availableBalance ? formatRub(financeContext.availableBalance) : 'не указано'}${financeContext.reserveBalance ? ` · активы: ${formatRub(financeContext.reserveBalance)}` : ''}${nextIncome ? ` · ближайшее: ${shortDate(nextIncome.date)} +${formatRub(nextIncome.amount)}` : ''}</div>
+        <div class="finance-summary-line">${financeAccount ? `${escapeHTML(financeAccount.name)}: ${formatRub(financeAccountBalance)}` : 'Счёт не создан'}</div>
         ${renderFinanceQuickForm('today')}
         <div class="finance-summary-line">Потрачено за день: ${formatRub(financeSummary.total)} · еда: ${formatRub(financeSummary.food)} · транспорт: ${formatRub(financeSummary.transport)} · другое: ${formatRub(financeSummary.other)}</div>
         ${renderFinanceNoExpensesButton(state.selectedDate)}
@@ -1354,12 +1505,8 @@ function splitFinanceGoals(value) {
   return parseFinanceGoals(value).map(goal => [goal.title, goal.amount, goal.term, goal.comment].filter(Boolean).join(' · '));
 }
 
-function renderFinanceNoExpensesButton(iso = state.selectedDate) {
-  const day = getFinance(iso);
-  if (day.expenses.length) {
-    return '<div class="finance-summary-line muted">День содержит траты — отметка “без трат” отключена.</div>';
-  }
-  return `<button class="ghost-button finance-no-expenses ${day.noExpenses ? 'active' : ''}" type="button" data-finance-no-expenses="${iso}">${day.noExpenses ? '✓ Сегодня не было трат' : 'Сегодня не было трат'}</button>`;
+function renderFinanceNoExpensesButton() {
+  return '';
 }
 
 function renderFinanceDaySummary(summary) {
@@ -1450,49 +1597,41 @@ function renderFinanceOperationsHistory() {
 }
 
 function renderFinanceQuickForm(scope) {
-  const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const categories = FINANCE_CATEGORIES.map(item => `<option value="${item.value}">${item.label}</option>`).join('');
-  const reasons = FINANCE_REASONS.map(item => `<option value="${item.value}">${item.label}</option>`).join('');
+  const categories = financeOptionHTML(financeCategoryOptions(), 'food');
   return `
-    <form class="form-grid finance" data-finance-form data-scope="${scope}">
+    <form class="form-grid finance" data-finance-v2-expense-form data-scope="${escapeHTML(scope)}" data-date="${escapeHTML(state.selectedDate)}">
       <label>Сумма, ₽<input name="amount" required inputmode="decimal" placeholder="Напр. 250"></label>
-      <label>Категория<select name="category">${categories}</select></label>
-      <label>Причина<select name="reason">${reasons}</select></label>
-      <label>Комментарий<input name="comment" placeholder="Необязательно"></label>
-      <input name="time" type="hidden" value="${time}">
+      <label>Категория<select name="categoryId">${categories}</select></label>
       <button class="primary-button" type="submit">Добавить</button>
     </form>
     <div class="quick-category-row" aria-label="Быстрые категории">
-      ${FINANCE_CATEGORIES.slice(0, 4).map(item => `<button class="ghost-button small" type="button" data-quick-finance-category="${item.value}">+ ${item.label}</button>`).join('')}
+      ${[['food','Еда'],['transport','Транспорт'],['home','Дом'],['health','Здоровье']].map(([id,name]) => `<button class="ghost-button small" type="button" data-finance-v2-quick-category="${id}">+ ${name}</button>`).join('')}
     </div>
   `;
 }
 
 function renderFinanceList(iso, compact = false) {
-  const expenses = [...getFinance(iso).expenses].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  if (!expenses.length) return getFinance(iso).noExpenses ? '<div class="empty">День отмечен без трат.</div>' : '<div class="empty">Трат пока нет.</div>';
+  const expenses = getFinanceTransactions({ type: 'EXPENSE', dateFrom: iso, dateTo: iso });
+  if (!expenses.length) return '<div class="empty">Трат пока нет.</div>';
   const visible = compact ? expenses.slice(0, 4) : expenses;
-  return visible.map(expense => renderFinanceCard(expense, compact)).join('') + (compact && expenses.length > 4 ? '<div class="muted finance-summary-line">Показаны последние 4 записи. Полный список во вкладке «Финансы».</div>' : '');
+  return visible.map(transaction => renderFinanceCard(transaction, compact)).join('') + (compact && expenses.length > 4 ? '<div class="muted finance-summary-line">Показаны последние 4 записи.</div>' : '');
 }
 
-function renderFinanceCard(expense, compact = false) {
-  const reason = getFinanceReasonLabel(expense.reason);
+function renderFinanceCard(transaction, compact = false) {
   return `
-    <article class="finance-card">
+    <article class="finance-card" data-finance-transaction-id="${escapeHTML(transaction.id)}">
       <div class="item-top">
         <div>
           <div class="badge-row">
-            <span class="badge important">${escapeHTML(getFinanceCategoryLabel(expense.category))}</span>
-            ${reason ? `<span class="badge secondary">${escapeHTML(reason)}</span>` : ''}
-            <span class="badge">${escapeHTML(expense.time || 'без времени')}</span>
+            <span class="badge important">${escapeHTML(getFinanceCategoryLabel(transaction.categoryId))}</span>
+            ${transaction.time ? `<span class="badge">${escapeHTML(transaction.time)}</span>` : ''}
           </div>
-          <h3>${formatRub(expense.amount)}</h3>
-          ${expense.comment ? `<p class="muted">${escapeHTML(expense.comment)}</p>` : ''}
+          <h3>${formatRub(transaction.amount)}</h3>
+          ${transaction.description ? `<p class="muted">${escapeHTML(transaction.description)}</p>` : ''}
         </div>
         <div class="actions">
-          ${!compact ? `<button class="ghost-button" data-finance-edit="${expense.id}">Изм.</button>` : ''}
-          <button class="danger-button" data-finance-delete="${expense.id}">Удал.</button>
+          <button class="ghost-button" type="button" data-finance-v2-edit="${escapeHTML(transaction.id)}">Изм.</button>
+          <button class="danger-button" type="button" data-finance-v2-delete="${escapeHTML(transaction.id)}">Удал.</button>
         </div>
       </div>
     </article>

@@ -20,6 +20,8 @@ jobs:
           node-version: 22
       - name: Apply Finance patch
         run: python scripts/finance-transaction-control-fix.py
+      - name: Align direct service worker release
+        run: sed -i 's/0.13.2-finance-planning-deficit-20260808/0.13.3-finance-transaction-control-20260808/g' js/app.js
       - name: Test
         run: npm test
       - name: Lint

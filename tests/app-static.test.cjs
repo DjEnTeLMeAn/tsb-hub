@@ -104,3 +104,10 @@ assert.ok(app.includes("['year','Год']"),'analytics year period missing');
 assert.ok(app.includes("['custom','Свой период']"),'analytics custom period missing');
 assert.ok(app.includes('Среднее в день'),'analytics daily average missing');
 assert.ok(app.includes('data-finance-analytics-history'),'analytics to history integration missing');
+
+
+// Finance v2 Part3 reconciliation is a real screen backed by one core ADJUSTMENT.
+assert.ok(app.includes('function renderFinanceReconcileScreen'),'reconciliation screen missing');
+assert.ok(app.includes('TSBFinanceCore.reconcileAccount'),'reconciliation must use finance core');
+assert.ok(app.includes('data-finance-management-open="reconcile"'),'reconciliation management entry missing');
+assert.ok(app.includes('ADJUSTMENT только на разницу'),'reconciliation explanation missing');

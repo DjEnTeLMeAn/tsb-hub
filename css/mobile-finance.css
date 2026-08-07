@@ -121,3 +121,10 @@
 .finance-v2-analytics-category:last-child{border-bottom:0}
 .finance-v2-analytics-category>div{display:grid;gap:2px}
 @media(max-width:520px){.finance-v2-analytics-custom{grid-template-columns:1fr}.finance-v2-analytics-custom button{grid-column:auto}}
+
+
+/* Finance v2 Part3 — reconciliation */
+.finance-v2-reconcile-card form{display:grid;gap:12px}
+.finance-v2-reconcile-card label{display:grid;gap:6px}
+.finance-v2-reconcile-current,.finance-v2-reconcile-diff{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.035)}
+.finance-v2-reconcile-current span,.finance-v2-reconcile-diff span{opacity:.72}

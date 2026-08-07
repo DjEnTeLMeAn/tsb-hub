@@ -302,3 +302,24 @@ test('Part3 analytics date span is inclusive and empty periods stay zero',()=>{
   const s=core.getAnalyticsSummary(f,{dateFrom:'2026-08-01',dateTo:'2026-08-07'});
   assert.deepEqual({income:s.income,expense:s.expense,difference:s.difference,expenseCount:s.expenseCount,average:s.averageExpensePerDay,days:s.days},{income:0,expense:0,difference:0,expenseCount:0,average:0,days:7});
 });
+
+
+test('Part3 reconciliation creates one ADJUSTMENT and reaches actual account balance',()=>{
+  let f=core.createEmptyFinance('2026-08-01T00:00:00.000Z');
+  f=core.createAccount(f,{id:'card',name:'Card',isDefault:true},{now:'2026-08-01T00:00:00.000Z'}).finance;
+  f=core.createTransaction(f,{type:'INCOME',amount:10000,accountId:'card',incomeTypeId:'personal',date:'2026-08-01'},{now:'2026-08-01T12:00:00.000Z',idFactory:()=> 'inc'}).finance;
+  const beforeAnalytics=core.getAnalyticsSummary(f,{dateFrom:'2026-08-01',dateTo:'2026-08-07'});
+  const r=core.reconcileAccount(f,'card','9750',{date:'2026-08-07',now:'2026-08-07T12:00:00.000Z',idFactory:()=> 'rec'});
+  assert.equal(r.ok,true);assert.equal(r.changed,true);assert.equal(r.difference,-250);
+  assert.equal(r.transaction.type,'ADJUSTMENT');assert.equal(r.transaction.systemKind,core.SYSTEM_KINDS.RECONCILIATION);
+  assert.equal(core.getAccountBalance(r.finance,'card'),9750);
+  assert.equal(r.finance.transactions.filter(x=>x.systemKind===core.SYSTEM_KINDS.RECONCILIATION).length,1);
+  const afterAnalytics=core.getAnalyticsSummary(r.finance,{dateFrom:'2026-08-01',dateTo:'2026-08-07'});
+  assert.deepEqual({income:afterAnalytics.income,expense:afterAnalytics.expense,difference:afterAnalytics.difference},{income:beforeAnalytics.income,expense:beforeAnalytics.expense,difference:beforeAnalytics.difference});
+});
+
+test('Part3 reconciliation with matching balance creates no transaction',()=>{
+  let f=core.createEmptyFinance('2026-08-01T00:00:00.000Z');f=core.createAccount(f,{id:'cash',name:'Cash',isDefault:true},{now:'2026-08-01T00:00:00.000Z'}).finance;
+  const count=f.transactions.length;const r=core.reconcileAccount(f,'cash','0',{now:'2026-08-07T12:00:00.000Z'});
+  assert.equal(r.ok,true);assert.equal(r.changed,false);assert.equal(r.difference,0);assert.equal(r.finance.transactions.length,count);
+});

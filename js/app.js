@@ -734,7 +734,8 @@ function financeMutationErrorText(error) {
     OBLIGATION_NOT_FOUND: 'Обязательный платёж не найден',
     EXPENSE_NOT_FOUND: 'Подходящая трата не найдена',
     TRANSACTION_ALREADY_LINKED: 'Эта трата уже связана с другим платежом',
-    ACCOUNT_NOT_FOUND: 'Счёт не найден'
+    ACCOUNT_NOT_FOUND: 'Счёт не найден',
+    INVALID_ACTUAL_BALANCE: 'Укажи фактический остаток'
   })[error] || 'Не удалось изменить финансы';
 }
 function applyFinanceMutation(result, message = '') {
@@ -1584,13 +1585,29 @@ async function archiveFinanceCategory(categoryId) {
 function renderFinanceCategoriesScreen(root=$('#tab-finance')) {
   if(!root)return;const categories=getFinanceStateV2().categories.filter(item=>item.active&&!item.archived);root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Категории</h2><p class="muted">Категории расходов для быстрого ввода и истории.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card"><div class="card-title-row"><h2>Активные категории</h2><button class="primary-button small" type="button" data-finance-category-add>+ Категория</button></div><div class="finance-v2-manage-list">${categories.map(renderFinanceCategoryCard).join('')}</div></section>`;bindFinanceV2Screen(root);
 }
+function renderFinanceReconcileScreen(root=$('#tab-finance')) {
+  if(!root)return;const accounts=getFinanceAccounts();const selectedId=state.financeReconcileAccountId&&accounts.some(x=>x.id===state.financeReconcileAccountId)?state.financeReconcileAccountId:(getDefaultFinanceAccount()?.id||accounts[0]?.id||'');
+  state.financeReconcileAccountId=selectedId;const selected=accounts.find(x=>x.id===selectedId)||null;const calculated=selected?getFinanceAccountBalance(selected.id):0;
+  const options=accounts.map(account=>`<option value="${escapeHTML(account.id)}" ${account.id===selectedId?'selected':''}>${escapeHTML(account.name)} · ${formatRub(getFinanceAccountBalance(account.id))}</option>`).join('');
+  root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Сверка баланса</h2><p class="muted">Фактический остаток не перезаписывает историю: разница фиксируется одной системной корректировкой.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
+    <section class="card finance-v2-reconcile-card"><form data-finance-reconcile-form><label>Счёт<select name="accountId" data-finance-reconcile-account>${options}</select></label><div class="finance-v2-reconcile-current"><span>По операциям</span><strong>${formatRub(calculated)}</strong></div><label>Фактически сейчас<input name="actualBalance" inputmode="decimal" placeholder="0" required></label><div class="finance-v2-reconcile-diff"><span>Разница</span><strong data-finance-reconcile-diff>—</strong></div><label>Комментарий <span class="muted">необязательно</span><input name="description" placeholder="Напр. сверка с банковским приложением"></label><button class="primary-button" type="submit">Сверить</button></form><p class="muted">Сверка создаёт ADJUSTMENT только на разницу. Она не считается доходом или расходом.</p></section>`;
+  bindFinanceV2Screen(root);
+}
+async function submitFinanceReconcile(form) {
+  const fd=new FormData(form);const accountId=String(fd.get('accountId')||'');const actual=String(fd.get('actualBalance')||'').trim();const description=String(fd.get('description')||'').trim();
+  const result=TSBFinanceCore.reconcileAccount(getFinanceStateV2(),accountId,actual,{date:toISODate(new Date()),description,idFactory:uid});
+  if(!result.ok){showToast(result.error==='INVALID_ACTUAL_BALANCE'?'Укажи фактический остаток':financeMutationErrorText(result.error));return;}
+  if(!result.changed){showToast('Баланс уже совпадает');return;}
+  applyFinanceMutation(result,`Сверка: ${result.difference>0?'+':''}${formatRub(result.difference)}`);
+}
+
 function renderFinanceManagementScreen(root=$('#tab-finance')) {
   if(!root)return;root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Управление</h2><p class="muted">Подробные настройки вынесены с главного экрана.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card finance-v2-management-list">
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="accounts"><span><strong>Счета и наличные</strong><small>Создать, переименовать, выбрать основной</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="categories"><span><strong>Категории</strong><small>Категории расходов</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="reserves"><span><strong>Резервы</strong><small>Назначенные деньги и цели</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="obligations"><span><strong>Обязательные платежи</strong><small>Будущие оплаты</small></span><b>›</b></button>
-    <div class="finance-v2-nav-row disabled" aria-disabled="true"><span><strong>Сверка баланса</strong><small>Будет реализована отдельно, без пустого экрана</small></span></div>
+    <button class="finance-v2-nav-row" type="button" data-finance-management-open="reconcile"><span><strong>Сверка баланса</strong><small>Сравнить расчётный и фактический остаток</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="sync"><span><strong>Экспорт данных</strong><small>Перейти к существующему экспорту JSON</small></span><b>›</b></button>
   </section>`;bindFinanceV2Screen(root);
 }
@@ -1786,6 +1803,9 @@ function bindFinanceV2Screen(root) {
   root.querySelectorAll('[data-finance-analytics-period]').forEach(button=>button.onclick=()=>{const a=ensureFinanceAnalyticsState();a.period=button.dataset.financeAnalyticsPeriod;renderFinance();});
   root.querySelector('[data-finance-analytics-custom]')?.addEventListener('submit',event=>{event.preventDefault();const fd=new FormData(event.currentTarget);const a=ensureFinanceAnalyticsState();const from=String(fd.get('dateFrom')||'');const to=String(fd.get('dateTo')||'');if(!normalizeAnyDateKey(from)||!normalizeAnyDateKey(to)||from>to){showToast('Проверь период');return;}a.dateFrom=from;a.dateTo=to;a.period='custom';renderFinance();});
   root.querySelector('[data-finance-analytics-history]')?.addEventListener('click',()=>{const range=financeAnalyticsRange();const h=ensureFinanceHistoryState();h.period='custom';h.dateFrom=range.dateFrom;h.dateTo=range.dateTo;h.type='ALL';state.financeSubscreen='';state.financeHistoryOpen=true;renderFinance();});
+  root.querySelector('[data-finance-reconcile-form]')?.addEventListener('submit',event=>{event.preventDefault();submitFinanceReconcile(event.currentTarget);});
+  root.querySelector('[data-finance-reconcile-account]')?.addEventListener('change',event=>{state.financeReconcileAccountId=event.target.value;renderFinance();});
+  root.querySelector('[data-finance-reconcile-form] [name="actualBalance"]')?.addEventListener('input',event=>{const raw=String(event.target.value||'').replace(',','.');const actual=Number(raw);const accountId=state.financeReconcileAccountId;const current=accountId?getFinanceAccountBalance(accountId):0;const target=root.querySelector('[data-finance-reconcile-diff]');if(target)target.textContent=raw!==''&&Number.isFinite(actual)?`${actual-current>0?'+':''}${formatRub(actual-current)}`:'—';});
   root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>{const target=button.dataset.financeManagementOpen;if(target==='sync'){setTab('sync');return;}openFinanceSubscreen(target,'management');});
   root.querySelector('[data-finance-category-add]')?.addEventListener('click',()=>openFinanceCategoryDialog());
   root.querySelectorAll('[data-finance-category-edit]').forEach(button=>button.onclick=()=>openFinanceCategoryDialog(button.dataset.financeCategoryEdit));
@@ -1874,6 +1894,7 @@ function renderFinance() {
   if (state.financeSubscreen === 'accounts') { renderFinanceAccountsScreen(root); return; }
   if (state.financeSubscreen === 'categories') { renderFinanceCategoriesScreen(root); return; }
   if (state.financeSubscreen === 'analytics') { renderFinanceAnalyticsScreen(root); return; }
+  if (state.financeSubscreen === 'reconcile') { renderFinanceReconcileScreen(root); return; }
   const finance = getFinanceStateV2();
   const recent = getFinanceTransactions().slice(0, 8);
   root.innerHTML = `

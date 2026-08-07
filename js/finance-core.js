@@ -10,7 +10,7 @@
   const PART2_MIGRATION_CHECKPOINT='FINANCE_V2_PART2_MODEL_COMPLETE';
   const UPCOMING_OBLIGATION_DAYS=30;
   const TYPES=Object.freeze({EXPENSE:'EXPENSE',INCOME:'INCOME',TRANSFER:'TRANSFER',ADJUSTMENT:'ADJUSTMENT'});
-  const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR'});
+  const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR',RECONCILIATION:'RECONCILIATION'});
   const OBLIGATION_STATUS=Object.freeze({ACTIVE:'ACTIVE',PAID:'PAID',CANCELLED:'CANCELLED'});
   const OBLIGATION_RECURRENCE=Object.freeze({NONE:'NONE',MONTHLY:'MONTHLY'});
 
@@ -686,6 +686,26 @@
     };
   }
 
+  function reconcileAccount(finance,accountId,actualBalance,{date='',time='',description='',now=nowISO(),idFactory=makeId}={}){
+    const state=normalizeFinance(finance,now);
+    const account=getAccount(state,accountId);
+    if(!account||account.archived||!account.active)return {ok:false,error:'ACCOUNT_NOT_FOUND',finance:state};
+    const raw=String(actualBalance??'').trim().replace(',','.');
+    if(raw===''||!Number.isFinite(Number(raw)))return {ok:false,error:'INVALID_ACTUAL_BALANCE',finance:state};
+    const actual=roundMoney(Number(raw));
+    const calculated=getAccountBalance(state,accountId);
+    const difference=roundMoney(actual-calculated);
+    if(Math.abs(difference)<0.005)return {ok:true,finance:state,account,calculated,actual,difference:0,changed:false,transaction:null};
+    const created=createTransaction(state,{
+      type:TYPES.ADJUSTMENT,amount:difference,accountId,
+      systemKind:SYSTEM_KINDS.RECONCILIATION,
+      date:validDate(date)?date:isoDateFromNow(now),time:validTime(time)?time:'',
+      description:text(description)||`Сверка счёта: фактически ${actual}`
+    },{now,idFactory});
+    if(!created.ok)return created;
+    return {ok:true,finance:created.finance,account,calculated,actual,difference,changed:true,transaction:created.transaction};
+  }
+
   function validateTransactionShape(transaction){
     const row=normalizeTransaction(transaction);
     if(!row)return {ok:false,error:'UNKNOWN_TYPE'};
@@ -710,7 +730,7 @@
     normalizeAccount,normalizeTransaction,normalizeReserve,normalizeObligation,normalizeFinance,validateTransactionShape,
     accountEffect,isMigrationComplete,migrateLegacyState,isPart2MigrationComplete,migratePart2State,
     getAccount,getDefaultAccount,getAccountBalance,getTotalBalance,getTransactions,isSystemLocked,
-    createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,
+    createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,reconcileAccount,
     getActiveReserves,getTotalReservedAmount,createReserve,updateReserve,adjustReserveAmount,archiveReserve,importLegacyReserve,
     getActiveObligations,getUpcomingObligations,getUpcomingObligationsTotal,createObligation,updateObligation,cancelObligation,payObligation,linkObligationToTransaction,
     getFreeMoney,getObligationCoverage,addDaysISO,addMonthISO,dateSpanDays,getAnalyticsSummary,

@@ -129,3 +129,15 @@ assert.ok(app.includes("accountId:h.accountId"),'history account filter must use
 assert.ok(app.includes('finance-v2-history-summary-grid'),'history analysis summary missing');
 assert.ok(app.includes('data-finance-history-export'),'filtered history CSV export missing');
 assert.ok(app.includes("exportFinanceCsv(financeHistoryTransactions(),'history-filtered')"),'history export must use current filtered rows');
+
+
+// Finance v2 Part3 finishes management without adding a parallel data model.
+assert.ok(app.includes('function renderFinanceIncomeTypesScreen'),'income type management screen missing');
+assert.ok(app.includes('TSBFinanceCore.createOrUpdateIncomeType'),'income type management must use core');
+assert.ok(app.includes('TSBFinanceCore.archiveIncomeType'),'income type archive must use core');
+assert.ok(app.includes('data-finance-management-open="income-types"'),'income type management entry missing');
+// Finance mutations on Finance should render only Finance instead of the whole app.
+const mutationStart=app.indexOf('function applyFinanceMutation');const mutationEnd=app.indexOf('function ',mutationStart+20);const mutationFn=app.slice(mutationStart,mutationEnd);
+assert.ok(mutationFn.includes("state.activeTab === 'finance'"),'Finance local render branch missing');
+assert.ok(mutationFn.includes('saveData(app,true)'),'Finance local mutation must persist data');
+assert.ok(mutationFn.includes('renderFinance()'),'Finance local mutation must redraw Finance only');

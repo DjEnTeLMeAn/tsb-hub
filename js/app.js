@@ -744,7 +744,15 @@ function applyFinanceMutation(result, message = '') {
     return false;
   }
   setFinanceStateV2(result.finance);
-  markChanged();
+  if (state.activeTab === 'finance') {
+    const scrollY=window.scrollY||document.documentElement.scrollTop||0;
+    saveData(app,true);
+    renderFinance();
+    requestAnimationFrame(()=>window.scrollTo(0,scrollY));
+  } else {
+    // Today still uses the established full render path because its mobile cleanup hooks live outside Finance.
+    markChanged();
+  }
   if (message && typeof showToast === 'function') showToast(message);
   return true;
 }
@@ -1635,10 +1643,30 @@ function renderFinanceExportScreen(root=$('#tab-finance')) {
     <section class="card finance-v2-export-card"><button class="primary-button" type="button" data-finance-export-json>Finance JSON</button><p class="muted">Счета, операции, резервы, обязательства и вычисляемые текущие показатели. Schema ${finance.schemaVersion}.</p><button class="ghost-button" type="button" data-finance-export-csv>Операции CSV</button><p class="muted">Пользовательская история операций без скрытого migration anchor.</p><button class="ghost-button" type="button" data-finance-export-full>Полный backup TSB Hub</button><p class="muted">Откроет существующий экспорт всей базы приложения.</p></section>`;bindFinanceV2Screen(root);
 }
 
+function renderFinanceIncomeTypeCard(item) {
+  return `<article class="finance-v2-manage-item"><div><div class="badge-row">${item.system?'<span class="badge secondary">системный</span>':''}</div><strong>${escapeHTML(item.name)}</strong></div><div class="actions"><button class="ghost-button small" type="button" data-finance-income-type-edit="${escapeHTML(item.id)}">Изм.</button>${item.system?'':`<button class="danger-button small" type="button" data-finance-income-type-archive="${escapeHTML(item.id)}">Архив</button>`}</div></article>`;
+}
+async function openFinanceIncomeTypeDialog(itemId='') {
+  const finance=getFinanceStateV2();const current=finance.incomeTypes.find(item=>item.id===itemId)||null;
+  const result=await openEditDialog({title:current?'Изменить тип поступления':'Новый тип поступления',fields:[{name:'name',label:'Название',value:current?.name||'',placeholder:'Напр. Подработка'}],submitText:'Подтвердить'});if(!result)return;
+  applyFinanceMutation(TSBFinanceCore.createOrUpdateIncomeType(finance,{...(current?{id:current.id}:{}),name:String(result.name||'').trim()},{idFactory:uid}),current?'Тип поступления изменён':'Тип поступления добавлен');
+}
+async function archiveFinanceIncomeType(itemId) {
+  const finance=getFinanceStateV2();const item=finance.incomeTypes.find(x=>x.id===itemId);if(!item||item.system)return;
+  const ok=await openConfirmDialog({title:'Архивировать тип поступления?',message:'Старые операции сохранят его id и останутся в истории.',confirmText:'Архивировать',danger:true});if(!ok)return;
+  applyFinanceMutation(TSBFinanceCore.archiveIncomeType(finance,itemId),'Тип поступления архивирован');
+}
+function renderFinanceIncomeTypesScreen(root=$('#tab-finance')) {
+  if(!root)return;const items=getFinanceStateV2().incomeTypes.filter(item=>item.active&&!item.archived);
+  root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Типы поступлений</h2><p class="muted">Используются только при добавлении INCOME.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card"><div class="card-title-row"><h2>Активные типы</h2><button class="primary-button small" type="button" data-finance-income-type-add>+ Тип</button></div><div class="finance-v2-manage-list">${items.map(renderFinanceIncomeTypeCard).join('')}</div></section>`;
+  bindFinanceV2Screen(root);
+}
+
 function renderFinanceManagementScreen(root=$('#tab-finance')) {
   if(!root)return;root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Управление</h2><p class="muted">Подробные настройки вынесены с главного экрана.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card finance-v2-management-list">
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="accounts"><span><strong>Счета и наличные</strong><small>Создать, переименовать, выбрать основной</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="categories"><span><strong>Категории</strong><small>Категории расходов</small></span><b>›</b></button>
+    <button class="finance-v2-nav-row" type="button" data-finance-management-open="income-types"><span><strong>Типы поступлений</strong><small>Источники INCOME</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="reserves"><span><strong>Резервы</strong><small>Назначенные деньги и цели</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="obligations"><span><strong>Обязательные платежи</strong><small>Будущие оплаты</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="reconcile"><span><strong>Сверка баланса</strong><small>Сравнить расчётный и фактический остаток</small></span><b>›</b></button>
@@ -1847,6 +1875,9 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-category-add]')?.addEventListener('click',()=>openFinanceCategoryDialog());
   root.querySelectorAll('[data-finance-category-edit]').forEach(button=>button.onclick=()=>openFinanceCategoryDialog(button.dataset.financeCategoryEdit));
   root.querySelectorAll('[data-finance-category-archive]').forEach(button=>button.onclick=()=>archiveFinanceCategory(button.dataset.financeCategoryArchive));
+  root.querySelector('[data-finance-income-type-add]')?.addEventListener('click',()=>openFinanceIncomeTypeDialog());
+  root.querySelectorAll('[data-finance-income-type-edit]').forEach(button=>button.onclick=()=>openFinanceIncomeTypeDialog(button.dataset.financeIncomeTypeEdit));
+  root.querySelectorAll('[data-finance-income-type-archive]').forEach(button=>button.onclick=()=>archiveFinanceIncomeType(button.dataset.financeIncomeTypeArchive));
 }
 
 function ensureFinanceHistoryState() {
@@ -1928,6 +1959,7 @@ function renderFinance() {
   if (state.financeSubscreen === 'management') { renderFinanceManagementScreen(root); return; }
   if (state.financeSubscreen === 'accounts') { renderFinanceAccountsScreen(root); return; }
   if (state.financeSubscreen === 'categories') { renderFinanceCategoriesScreen(root); return; }
+  if (state.financeSubscreen === 'income-types') { renderFinanceIncomeTypesScreen(root); return; }
   if (state.financeSubscreen === 'analytics') { renderFinanceAnalyticsScreen(root); return; }
   if (state.financeSubscreen === 'reconcile') { renderFinanceReconcileScreen(root); return; }
   if (state.financeSubscreen === 'export') { renderFinanceExportScreen(root); return; }

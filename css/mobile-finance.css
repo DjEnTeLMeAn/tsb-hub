@@ -142,3 +142,8 @@
 .finance-v2-history-summary-grid strong{font-size:.94rem;overflow-wrap:anywhere}
 .finance-v2-history-summary-note{margin:7px 0 0}
 @media(max-width:600px){.finance-v2-history-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-v2-history-search{grid-template-columns:1fr}}
+
+
+/* Finance v2 Part3 — final management/polish */
+.finance-v2-management-list .finance-v2-nav-row{min-height:54px}
+.finance-v2-manage-item .actions{flex-shrink:0}

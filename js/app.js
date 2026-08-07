@@ -1,4 +1,4 @@
-const APP_VERSION = '0.13.2-finance-planning-deficit';
+const APP_VERSION = '0.13.3-finance-transaction-control';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -723,6 +723,7 @@ function financeOptionHTML(options, selected = '') {
 function financeMutationErrorText(error) {
   return ({
     SYSTEM_LOCKED: 'Системную операцию нельзя изменить',
+    INVALID_AMOUNT: 'Сумма должна быть больше 0. Если операции не было — удали её.',
     INVALID_RESERVE_AMOUNT: 'Сумма резерва не может быть отрицательной',
     INVALID_TARGET_AMOUNT: 'Цель должна быть больше нуля',
     NAME_REQUIRED: 'Укажи название',
@@ -1439,9 +1440,10 @@ function renderFinanceV2TransactionRow(transaction, options = {}) {
   const from = getFinanceStateV2().accounts.find(item => item.id === transaction.fromAccountId);
   const to = getFinanceStateV2().accounts.find(item => item.id === transaction.toAccountId);
   const accountText = transaction.type === 'TRANSFER' ? `${from?.name || '—'} → ${to?.name || '—'}` : (account?.name || '');
+  const editable=!TSBFinanceCore.isSystemLocked(transaction);
+  const actionButtons=editable?`<div class="actions finance-v2-operation-actions"><button class="ghost-button mf-icon-action" type="button" data-finance-v2-edit="${escapeHTML(transaction.id)}" title="Изменить" aria-label="Изменить операцию">✎</button><button class="danger-button mf-icon-action mf-trash-action" type="button" data-finance-v2-delete="${escapeHTML(transaction.id)}" title="Удалить" aria-label="Удалить операцию">🗑</button></div>`:'<span class="finance-v2-chevron">›</span>';
   return `<article class="finance-card finance-v2-operation ${financeTransactionTone(transaction)}" data-finance-v2-open="${escapeHTML(transaction.id)}">
-    <div class="item-top"><div><div class="badge-row"><span class="badge ${transaction.type === 'EXPENSE' ? 'important' : 'secondary'}">${escapeHTML(financeTypeLabel(transaction))}</span>${transaction.time ? `<span class="badge">${escapeHTML(transaction.time)}</span>` : ''}</div><h3>${financeSignedAmount(transaction)}</h3>${transaction.description ? `<p class="muted">${escapeHTML(transaction.description)}</p>` : ''}${accountText ? `<p class="muted finance-v2-account-note">${escapeHTML(accountText)}</p>` : ''}</div>
-    ${compact ? '<span class="finance-v2-chevron">›</span>' : `<div class="actions"><button class="ghost-button" type="button" data-finance-v2-edit="${escapeHTML(transaction.id)}">Изм.</button><button class="danger-button" type="button" data-finance-v2-delete="${escapeHTML(transaction.id)}">Удал.</button></div>`}</div>
+    <div class="item-top"><div><div class="badge-row"><span class="badge ${transaction.type === 'EXPENSE' ? 'important' : 'secondary'}">${escapeHTML(financeTypeLabel(transaction))}</span>${transaction.time ? `<span class="badge">${escapeHTML(transaction.time)}</span>` : ''}</div><h3>${financeSignedAmount(transaction)}</h3>${transaction.description ? `<p class="muted">${escapeHTML(transaction.description)}</p>` : ''}${accountText ? `<p class="muted finance-v2-account-note">${escapeHTML(accountText)}</p>` : ''}</div>${actionButtons}</div>
   </article>`;
 }
 async function openFinanceV2AccountDialog(accountId = '') {
@@ -1733,11 +1735,19 @@ async function importLegacyFinanceReserve() {
   const ok=await openConfirmDialog({title:'Импортировать старый резерв?',message:`В старых данных найдено ${formatRub(amount)}. Поле исторически могло обозначать не только физический счёт, поэтому оно не переносилось автоматически. Импорт создаст резерв «Старый резерв» и не изменит деньги на счетах.`,confirmText:'Импортировать'});
   if(!ok)return;applyFinanceMutation(TSBFinanceCore.importLegacyReserve(finance,{idFactory:uid}),'Старый резерв импортирован');
 }
+async function restoreLegacyFinanceReserveBalance() {
+  const finance=getFinanceStateV2();const amount=Number(finance.migration?.legacyReserveAmount||0);
+  if(finance.migration?.legacyReserveStatus!=='MIGRATED'||amount<=0||finance.migration?.legacyReserveBalanceStatus==='RESTORED')return;
+  const account=TSBFinanceCore.getDefaultAccount(finance);if(!account){showToast('Нет активного счёта');return;}
+  const ok=await openConfirmDialog({title:'Восстановить деньги старого резерва?',message:`Добавить ${formatRub(amount)} в общий баланс как системное восстановление старых данных. Это НЕ доход и не попадёт в аналитику. Если раньше для обхода ты создавал фиктивное поступление на эту сумму — после восстановления удали его.`,confirmText:'Подтвердить'});
+  if(!ok)return;applyFinanceMutation(TSBFinanceCore.restoreLegacyReserveBalance(finance,{accountId:account.id,idFactory:uid}),'Деньги старого резерва восстановлены');
+}
 function renderFinanceReservesScreen(root = $('#tab-finance')) {
-  if(!root)return; const finance=getFinanceStateV2(); const active=TSBFinanceCore.getActiveReserves(finance); const legacyReview=finance.migration?.legacyReserveStatus==='REVIEW_REQUIRED'&&Number(finance.migration?.legacyReserveAmount)>0;
+  if(!root)return; const finance=getFinanceStateV2(); const active=TSBFinanceCore.getActiveReserves(finance); const legacyReview=finance.migration?.legacyReserveStatus==='REVIEW_REQUIRED'&&Number(finance.migration?.legacyReserveAmount)>0; const legacyRestore=finance.migration?.legacyReserveStatus==='MIGRATED'&&Number(finance.migration?.legacyReserveAmount)>0&&finance.migration?.legacyReserveBalanceStatus!=='RESTORED';
   root.innerHTML=`
     <section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Резервы</h2><p class="muted">Резерв — назначение части денег. Это не расход и не перевод между счетами.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
     ${legacyReview?`<section class="card finance-v2-legacy-review"><div><h3>Найден старый резерв · ${formatRub(finance.migration.legacyReserveAmount)}</h3><p class="muted">Он не был перенесён автоматически: происхождение старого поля неоднозначно.</p></div><button class="ghost-button" type="button" data-finance-legacy-reserve-import>Импортировать как «Старый резерв»</button></section>`:''}
+    ${legacyRestore?`<section class="card finance-v2-legacy-review"><div><h3>Старый резерв · ${formatRub(finance.migration.legacyReserveAmount)}</h3><p class="muted">Резерв уже есть, но его старые деньги ещё не включены в общий баланс.</p></div><button class="ghost-button" type="button" data-finance-legacy-reserve-restore>Восстановить в баланс</button></section>`:''}
     <section class="card"><div class="card-title-row"><div><h2>Активные резервы</h2><p class="muted">Всего назначено: ${formatRub(TSBFinanceCore.getTotalReservedAmount(finance))}</p></div><button class="primary-button small" type="button" data-finance-reserve-create>+ Создать</button></div>
       <div class="finance-v2-reserve-list full">${active.length?active.map(item=>renderFinanceReserveCard(item)).join(''):'<div class="empty">Резервов пока нет.</div>'}</div>
     </section>`;
@@ -1851,6 +1861,7 @@ function bindFinanceV2Screen(root) {
   root.querySelectorAll('[data-finance-reserve-adjust]').forEach(button=>button.onclick=()=>adjustFinanceReserve(button.dataset.financeReserveAdjust,button.dataset.direction));
   root.querySelectorAll('[data-finance-reserve-archive]').forEach(button=>button.onclick=()=>archiveFinanceReserve(button.dataset.financeReserveArchive));
   root.querySelector('[data-finance-legacy-reserve-import]')?.addEventListener('click',importLegacyFinanceReserve);
+  root.querySelector('[data-finance-legacy-reserve-restore]')?.addEventListener('click',restoreLegacyFinanceReserveBalance);
   root.querySelector('[data-finance-obligations-open]')?.addEventListener('click',()=>openFinanceSubscreen('obligations'));
   root.querySelectorAll('[data-finance-obligation-create]').forEach(button=>button.onclick=()=>openFinanceObligationDialog());
   root.querySelectorAll('[data-finance-obligation-edit]').forEach(button=>button.onclick=()=>openFinanceObligationDialog(button.dataset.financeObligationEdit));
@@ -3314,7 +3325,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.13.2-finance-planning-deficit-20260808')
+    navigator.serviceWorker.register('./service-worker.js?v=0.13.3-finance-transaction-control-20260808')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

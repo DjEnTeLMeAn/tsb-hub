@@ -97,3 +97,17 @@ test('planning deficit is allowed for reserves and obligations', () => {
   const obligation = core.createObligation(reserve.finance,{name:'Платёж через месяц',amount:2000,dueDate:'2026-09-07',recurrence:'MONTHLY'},{now:'2026-08-08T00:00:00.000Z',fromDate:'2026-08-08'});
   assert.equal(obligation.ok,true);assert.equal(obligation.hasShortfall,true);assert.equal(obligation.obligation.recurrence,'MONTHLY');
 });
+
+
+test('imported legacy reserve balance can be restored once without creating income',()=>{
+  let f=funded(1000);
+  f.migration={...f.migration,part2Checkpoint:core.PART2_MIGRATION_CHECKPOINT,legacyReserveStatus:'MIGRATED',legacyReserveAmount:5000};
+  f.reserves=[core.normalizeReserve({id:'reserve_legacy_v1',name:'Старый резерв',amount:5000},0)];
+  const beforeIncome=f.transactions.filter(x=>x.type==='INCOME').length;
+  let r=core.restoreLegacyReserveBalance(f,{accountId:'card',now:'2026-08-08T00:00:00.000Z'});
+  assert.equal(r.ok,true);assert.equal(r.restored,true);f=r.finance;
+  assert.equal(core.getTotalBalance(f),6000);assert.equal(core.getTotalReservedAmount(f),5000);assert.equal(core.getFreeMoney(f,{fromDate:'2026-08-08'}),1000);
+  assert.equal(f.transactions.filter(x=>x.type==='INCOME').length,beforeIncome);
+  const repair=f.transactions.find(x=>x.systemKind==='LEGACY_RESERVE_BALANCE');assert.ok(repair);assert.equal(core.isSystemLocked(repair),true);
+  r=core.restoreLegacyReserveBalance(f,{accountId:'card',now:'2026-08-08T01:00:00.000Z'});assert.equal(r.restored,false);assert.equal(r.finance.transactions.filter(x=>x.systemKind==='LEGACY_RESERVE_BALANCE').length,1);
+});

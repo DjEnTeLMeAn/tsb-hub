@@ -1,7 +1,7 @@
-// TSB Hub v0.13.2-finance-planning-deficit — single PWA update authority.
+// TSB Hub v0.13.3-finance-transaction-control — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.13.2-finance-planning-deficit-20260808';
+  const RELEASE='0.13.3-finance-transaction-control-20260808';
   const VERSION_URL='./version.json';
   const RELOAD_KEY='tsb_hub_reload_'+RELEASE;
   const nativeRegister='serviceWorker' in navigator?navigator.serviceWorker.register.bind(navigator.serviceWorker):null;

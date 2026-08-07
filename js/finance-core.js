@@ -10,7 +10,7 @@
   const PART2_MIGRATION_CHECKPOINT='FINANCE_V2_PART2_MODEL_COMPLETE';
   const UPCOMING_OBLIGATION_DAYS=30;
   const TYPES=Object.freeze({EXPENSE:'EXPENSE',INCOME:'INCOME',TRANSFER:'TRANSFER',ADJUSTMENT:'ADJUSTMENT'});
-  const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR',RECONCILIATION:'RECONCILIATION'});
+  const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR',RECONCILIATION:'RECONCILIATION',LEGACY_RESERVE_BALANCE:'LEGACY_RESERVE_BALANCE'});
   const OBLIGATION_STATUS=Object.freeze({ACTIVE:'ACTIVE',PAID:'PAID',CANCELLED:'CANCELLED'});
   const OBLIGATION_RECURRENCE=Object.freeze({NONE:'NONE',MONTHLY:'MONTHLY'});
 
@@ -199,6 +199,9 @@
         part2CompletedAt:text(source.migration?.part2CompletedAt),
         legacyReserveStatus:text(source.migration?.legacyReserveStatus),
         legacyReserveAmount:nonNegativeMoney(source.migration?.legacyReserveAmount),
+        legacyReserveBalanceStatus:text(source.migration?.legacyReserveBalanceStatus),
+        legacyReserveBalanceTransactionId:text(source.migration?.legacyReserveBalanceTransactionId),
+        legacyReserveBalanceRestoredAt:text(source.migration?.legacyReserveBalanceRestoredAt),
         legacyObligationsMigrated:Number(source.migration?.legacyObligationsMigrated||0),
         legacyObligationsSkipped:Number(source.migration?.legacyObligationsSkipped||0)
       },
@@ -412,7 +415,7 @@
     const state=normalizeFinance(finance);
     return roundMoney(state.accounts.reduce((sum,account)=>sum+getAccountBalance(state,account.id),0));
   }
-  function isSystemLocked(transaction){return transaction?.type===TYPES.ADJUSTMENT&&transaction?.systemKind===SYSTEM_KINDS.MIGRATION_ANCHOR}
+  function isSystemLocked(transaction){return transaction?.type===TYPES.ADJUSTMENT&&[SYSTEM_KINDS.MIGRATION_ANCHOR,SYSTEM_KINDS.LEGACY_RESERVE_BALANCE].includes(transaction?.systemKind)}
   function transactionSortKey(transaction){return `${transaction?.date||''}T${transaction?.time||'00:00'}|${transaction?.updatedAt||transaction?.createdAt||''}`}
   function getTransactions(finance,filters={}){
     const state=normalizeFinance(finance);
@@ -596,6 +599,20 @@
     state.reserves.push(reserve);state.migration={...migration,legacyReserveStatus:'MIGRATED'};
     return {ok:true,finance:normalizeFinance(state,now),reserve,imported:true};
   }
+  function restoreLegacyReserveBalance(finance,{accountId='',now=nowISO(),idFactory=makeId}={}){
+    let state=normalizeFinance(finance,now);const migration=state.migration||{};const amount=nonNegativeMoney(migration.legacyReserveAmount);
+    const existing=state.transactions.find(tx=>tx.type===TYPES.ADJUSTMENT&&tx.systemKind===SYSTEM_KINDS.LEGACY_RESERVE_BALANCE);
+    if(migration.legacyReserveBalanceStatus==='RESTORED'||existing){
+      if(existing&&migration.legacyReserveBalanceStatus!=='RESTORED')state.migration={...migration,legacyReserveBalanceStatus:'RESTORED',legacyReserveBalanceTransactionId:existing.id,legacyReserveBalanceRestoredAt:text(existing.createdAt)||now};
+      return {ok:true,finance:normalizeFinance(state,now),transaction:existing||null,restored:false};
+    }
+    if(migration.legacyReserveStatus!=='MIGRATED'||amount<=0)return {ok:false,error:'NO_IMPORTED_LEGACY_RESERVE',finance:state};
+    const account=getAccount(state,accountId)||getDefaultAccount(state);if(!account||account.archived||!account.active)return {ok:false,error:'ACCOUNT_NOT_FOUND',finance:state};
+    const created=createTransaction(state,{id:'legacy_reserve_balance_v1',type:TYPES.ADJUSTMENT,amount,accountId:account.id,date:isoDateFromNow(now),description:'Восстановление денег старого резерва',systemKind:SYSTEM_KINDS.LEGACY_RESERVE_BALANCE},{now,idFactory});
+    if(!created.ok)return created;state=created.finance;state.migration={...state.migration,legacyReserveBalanceStatus:'RESTORED',legacyReserveBalanceTransactionId:created.transaction.id,legacyReserveBalanceRestoredAt:now};
+    return {ok:true,finance:normalizeFinance(state,now),transaction:created.transaction,restored:true};
+  }
+
   function validateObligationDraft(draft){
     if(!text(draft?.name??draft?.title))return {ok:false,error:'NAME_REQUIRED'};
     if(positiveMoney(draft?.amount)<=0)return {ok:false,error:'INVALID_AMOUNT'};
@@ -726,7 +743,7 @@
     accountEffect,isMigrationComplete,migrateLegacyState,isPart2MigrationComplete,migratePart2State,
     getAccount,getDefaultAccount,getAccountBalance,getTotalBalance,getTransactions,isSystemLocked,
     createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,reconcileAccount,
-    getActiveReserves,getTotalReservedAmount,createReserve,updateReserve,adjustReserveAmount,archiveReserve,importLegacyReserve,
+    getActiveReserves,getTotalReservedAmount,createReserve,updateReserve,adjustReserveAmount,archiveReserve,importLegacyReserve,restoreLegacyReserveBalance,
     getActiveObligations,getUpcomingObligations,getUpcomingObligationsTotal,createObligation,updateObligation,cancelObligation,payObligation,linkObligationToTransaction,
     getFreeMoney,getObligationCoverage,addDaysISO,addMonthISO,dateSpanDays,getAnalyticsSummary,
     createOrUpdateCategory,archiveCategory,createOrUpdateIncomeType,archiveIncomeType

@@ -128,3 +128,8 @@
 .finance-v2-reconcile-card label{display:grid;gap:6px}
 .finance-v2-reconcile-current,.finance-v2-reconcile-diff{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.035)}
 .finance-v2-reconcile-current span,.finance-v2-reconcile-diff span{opacity:.72}
+
+
+/* Finance v2 Part3 — export */
+.finance-v2-export-card{display:grid;gap:8px}
+.finance-v2-export-card p{margin:0 0 8px}

@@ -1601,6 +1601,40 @@ async function submitFinanceReconcile(form) {
   applyFinanceMutation(result,`Сверка: ${result.difference>0?'+':''}${formatRub(result.difference)}`);
 }
 
+function downloadFinanceFile(filename,textValue,type='application/json;charset=utf-8') {
+  const blob=new Blob([textValue],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);
+}
+function financeCsvCell(value) {
+  const text=String(value??'');return /[";,\n\r]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
+}
+function financeTransactionExportRow(transaction) {
+  const finance=getFinanceStateV2();const account=finance.accounts.find(x=>x.id===transaction.accountId);const from=finance.accounts.find(x=>x.id===transaction.fromAccountId);const to=finance.accounts.find(x=>x.id===transaction.toAccountId);
+  const category=transaction.type==='EXPENSE'?getFinanceCategoryLabel(transaction.categoryId):'';const incomeType=transaction.type==='INCOME'?(finance.incomeTypes.find(x=>x.id===transaction.incomeTypeId)?.name||''):'';
+  return [transaction.date,transaction.time||'',transaction.type,transaction.amount,account?.name||'',from?.name||'',to?.name||'',category,incomeType,transaction.systemKind||'',transaction.description||''];
+}
+function financeTransactionsCsv(rows=getFinanceTransactions()) {
+  const header=['date','time','type','amount','account','from_account','to_account','category','income_type','system_kind','description'];
+  return '\uFEFF'+[header,...rows.map(financeTransactionExportRow)].map(row=>row.map(financeCsvCell).join(';')).join('\n');
+}
+function buildFinanceExportObject() {
+  const finance=TSBFinanceCore.normalizeFinance(getFinanceStateV2());const coverage=getFinanceCoverage();
+  return {
+    exportedAt:new Date().toISOString(),appVersion:APP_VERSION,financeSchemaVersion:finance.schemaVersion,
+    balances:{total:coverage.totalAccounts,reserved:coverage.reserved,upcoming:coverage.upcoming,free:coverage.free,accounts:finance.accounts.map(account=>({id:account.id,name:account.name,balance:getFinanceAccountBalance(account.id),active:account.active,archived:account.archived,isDefault:account.isDefault}))},
+    finance
+  };
+}
+function exportFinanceJson() {
+  downloadFinanceFile(`tsb_finance_${toISODate(new Date())}.json`,JSON.stringify(buildFinanceExportObject(),null,2));showToast('Finance JSON экспортирован');
+}
+function exportFinanceCsv(rows=getFinanceTransactions(),suffix='operations') {
+  downloadFinanceFile(`tsb_finance_${suffix}_${toISODate(new Date())}.csv`,financeTransactionsCsv(rows),'text/csv;charset=utf-8');showToast('CSV экспортирован');
+}
+function renderFinanceExportScreen(root=$('#tab-finance')) {
+  if(!root)return;const finance=getFinanceStateV2();root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Экспорт финансов</h2><p class="muted">Экспорт не меняет данные и не создаёт операций.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section>
+    <section class="card finance-v2-export-card"><button class="primary-button" type="button" data-finance-export-json>Finance JSON</button><p class="muted">Счета, операции, резервы, обязательства и вычисляемые текущие показатели. Schema ${finance.schemaVersion}.</p><button class="ghost-button" type="button" data-finance-export-csv>Операции CSV</button><p class="muted">Пользовательская история операций без скрытого migration anchor.</p><button class="ghost-button" type="button" data-finance-export-full>Полный backup TSB Hub</button><p class="muted">Откроет существующий экспорт всей базы приложения.</p></section>`;bindFinanceV2Screen(root);
+}
+
 function renderFinanceManagementScreen(root=$('#tab-finance')) {
   if(!root)return;root.innerHTML=`<section class="card finance-v2-subscreen-head"><div class="card-title-row"><div><h2>Управление</h2><p class="muted">Подробные настройки вынесены с главного экрана.</p></div><button class="ghost-button small" type="button" data-finance-subscreen-back>Назад</button></div></section><section class="card finance-v2-management-list">
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="accounts"><span><strong>Счета и наличные</strong><small>Создать, переименовать, выбрать основной</small></span><b>›</b></button>
@@ -1608,7 +1642,7 @@ function renderFinanceManagementScreen(root=$('#tab-finance')) {
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="reserves"><span><strong>Резервы</strong><small>Назначенные деньги и цели</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="obligations"><span><strong>Обязательные платежи</strong><small>Будущие оплаты</small></span><b>›</b></button>
     <button class="finance-v2-nav-row" type="button" data-finance-management-open="reconcile"><span><strong>Сверка баланса</strong><small>Сравнить расчётный и фактический остаток</small></span><b>›</b></button>
-    <button class="finance-v2-nav-row" type="button" data-finance-management-open="sync"><span><strong>Экспорт данных</strong><small>Перейти к существующему экспорту JSON</small></span><b>›</b></button>
+    <button class="finance-v2-nav-row" type="button" data-finance-management-open="export"><span><strong>Экспорт данных</strong><small>Finance JSON, CSV операций и полный backup</small></span><b>›</b></button>
   </section>`;bindFinanceV2Screen(root);
 }
 
@@ -1806,7 +1840,10 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-reconcile-form]')?.addEventListener('submit',event=>{event.preventDefault();submitFinanceReconcile(event.currentTarget);});
   root.querySelector('[data-finance-reconcile-account]')?.addEventListener('change',event=>{state.financeReconcileAccountId=event.target.value;renderFinance();});
   root.querySelector('[data-finance-reconcile-form] [name="actualBalance"]')?.addEventListener('input',event=>{const raw=String(event.target.value||'').replace(',','.');const actual=Number(raw);const accountId=state.financeReconcileAccountId;const current=accountId?getFinanceAccountBalance(accountId):0;const target=root.querySelector('[data-finance-reconcile-diff]');if(target)target.textContent=raw!==''&&Number.isFinite(actual)?`${actual-current>0?'+':''}${formatRub(actual-current)}`:'—';});
-  root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>{const target=button.dataset.financeManagementOpen;if(target==='sync'){setTab('sync');return;}openFinanceSubscreen(target,'management');});
+  root.querySelector('[data-finance-export-json]')?.addEventListener('click',exportFinanceJson);
+  root.querySelector('[data-finance-export-csv]')?.addEventListener('click',()=>exportFinanceCsv());
+  root.querySelector('[data-finance-export-full]')?.addEventListener('click',()=>setTab('sync'));
+  root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>openFinanceSubscreen(button.dataset.financeManagementOpen,'management'));
   root.querySelector('[data-finance-category-add]')?.addEventListener('click',()=>openFinanceCategoryDialog());
   root.querySelectorAll('[data-finance-category-edit]').forEach(button=>button.onclick=()=>openFinanceCategoryDialog(button.dataset.financeCategoryEdit));
   root.querySelectorAll('[data-finance-category-archive]').forEach(button=>button.onclick=()=>archiveFinanceCategory(button.dataset.financeCategoryArchive));
@@ -1895,6 +1932,7 @@ function renderFinance() {
   if (state.financeSubscreen === 'categories') { renderFinanceCategoriesScreen(root); return; }
   if (state.financeSubscreen === 'analytics') { renderFinanceAnalyticsScreen(root); return; }
   if (state.financeSubscreen === 'reconcile') { renderFinanceReconcileScreen(root); return; }
+  if (state.financeSubscreen === 'export') { renderFinanceExportScreen(root); return; }
   const finance = getFinanceStateV2();
   const recent = getFinanceTransactions().slice(0, 8);
   root.innerHTML = `

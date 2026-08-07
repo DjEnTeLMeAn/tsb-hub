@@ -111,3 +111,12 @@ assert.ok(app.includes('function renderFinanceReconcileScreen'),'reconciliation 
 assert.ok(app.includes('TSBFinanceCore.reconcileAccount'),'reconciliation must use finance core');
 assert.ok(app.includes('data-finance-management-open="reconcile"'),'reconciliation management entry missing');
 assert.ok(app.includes('ADJUSTMENT только на разницу'),'reconciliation explanation missing');
+
+
+// Finance v2 Part3 export stays separate from the full TSB backup.
+assert.ok(app.includes('function buildFinanceExportObject'),'Finance JSON export builder missing');
+assert.ok(app.includes('function financeTransactionsCsv'),'Finance CSV export missing');
+assert.ok(app.includes('function renderFinanceExportScreen'),'Finance export screen missing');
+assert.ok(app.includes('data-finance-management-open="export"'),'Finance export management entry missing');
+assert.ok(app.includes('Полный backup TSB Hub'),'full backup bridge missing');
+assert.ok(app.includes('financeSchemaVersion:finance.schemaVersion'),'Finance export schema marker missing');

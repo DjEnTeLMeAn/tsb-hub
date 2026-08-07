@@ -1,4 +1,4 @@
-const APP_VERSION = '0.13.0-finance-v2-complete';
+const APP_VERSION = '0.13.1-finance-mobile-fix';
 const STORAGE_KEY = 'tsb_hub_data_v1';
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
@@ -3315,7 +3315,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.13.0-finance-v2-complete-20260807')
+    navigator.serviceWorker.register('./service-worker.js?v=0.13.1-finance-mobile-fix-20260808')
       .then(registration => {
         registration.addEventListener('updatefound', () => {
           const worker = registration.installing;

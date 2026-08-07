@@ -1,0 +1,54 @@
+/* TSB Hub 0.10.7 — confirmation dialogs: actions stay at the bottom, symmetric and explicit. */
+.edit-dialog:has([data-confirm-no]) .modal-card {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 16px !important;
+}
+
+.edit-dialog:has([data-confirm-no]) .modal-actions {
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
+  margin-top: 4px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+
+.edit-dialog:has([data-confirm-no]) .modal-actions > button {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  padding: 0 14px !important;
+  border-radius: 14px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: .9rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+
+.edit-dialog:has([data-confirm-no]) [data-confirm-no] {
+  grid-column: 1 !important;
+  background: rgba(255,255,255,.035) !important;
+}
+
+.edit-dialog:has([data-confirm-no]) [data-confirm-yes] {
+  grid-column: 2 !important;
+}
+
+.edit-dialog:has([data-confirm-no]) [data-confirm-yes].danger-button {
+  background: rgba(239,68,68,.18) !important;
+  border-color: rgba(248,113,113,.48) !important;
+  color: #fecaca !important;
+}
+
+@media (max-width: 430px) {
+  .edit-dialog:has([data-confirm-no]) .modal-actions {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+}

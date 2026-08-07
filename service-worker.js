@@ -1,4 +1,4 @@
-const RELEASE='0.10.4-summary-fix-20260807';
+const RELEASE='0.10.5-noexpense-taskcheck-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

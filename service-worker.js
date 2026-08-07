@@ -1,4 +1,4 @@
-const RELEASE='0.10.7-confirm-actions-20260807';
+const RELEASE='0.10.8-modal-actions-20260807';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

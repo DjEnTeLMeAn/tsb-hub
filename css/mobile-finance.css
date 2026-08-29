@@ -174,3 +174,10 @@
 
 /* Finance transaction actions: explicit edit/delete on every user operation. */
 .finance-v2-operation .finance-v2-operation-actions{display:flex!important;flex:0 0 auto!important;width:auto!important;align-items:center!important;justify-content:flex-end!important;gap:7px!important}.finance-v2-operation .finance-v2-operation-actions button{width:38px!important;min-width:38px!important;max-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border-radius:999px!important;display:inline-grid!important;place-items:center!important}.finance-v2-operation .item-top>div:first-child{min-width:0!important}
+
+/* Stage 2 finance width and touch contract. */
+#tab-finance,#tab-finance .card,#tab-finance [class*="finance-v2-"]{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+#tab-finance button,#tab-finance summary{min-height:44px;touch-action:manipulation}
+#tab-finance input,#tab-finance select,#tab-finance textarea{min-height:44px;min-width:0}
+#tab-finance .finance-v2-operation-actions button{width:44px!important;min-width:44px!important;max-width:44px!important;height:44px!important;min-height:44px!important}
+@media(max-width:600px){#tab-finance .finance-v2-account,#tab-finance .finance-v2-manage-item{grid-template-columns:1fr;align-items:start}#tab-finance .finance-v2-account .actions,#tab-finance .finance-v2-manage-item .actions{width:100%!important;justify-content:stretch!important}#tab-finance .finance-v2-account .actions button,#tab-finance .finance-v2-manage-item .actions button{flex:1 1 0;min-width:0!important;width:100%!important}}

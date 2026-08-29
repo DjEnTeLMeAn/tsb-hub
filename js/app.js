@@ -1,5 +1,10 @@
 const APP_VERSION = '0.13.3-finance-transaction-control';
 const STORAGE_KEY = 'tsb_hub_data_v1';
+const RECOVERY_BACKUP_KEY = `${STORAGE_KEY}_recovery`;
+const DEVICE_ID_KEY = 'tsb_hub_device_id';
+const FULL_BACKUP_TYPE = 'full';
+const FINANCE_BACKUP_TYPE = 'finance';
+const BACKUP_FORMAT_VERSION = 1;
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
 const OLD_HEALTH_SETTINGS_KEY = 'healthSettings';
@@ -30,7 +35,7 @@ const FINANCE_REASONS = [
   { value: 'lazy', label: 'Лень' }
 ];
 const SESSION_TAB_KEY = 'tsb_hub_active_tab_session';
-const APP_TABS = ['today', 'plans', 'food', 'finance', 'important', 'sync', 'settings'];
+const APP_TABS = ['today', 'food', 'plans', 'finance', 'important', 'sync', 'settings'];
 
 function getInitialActiveTab() {
   try {
@@ -102,16 +107,24 @@ function createDefaultData() {
 }
 
 function getOrCreateDeviceId() {
-  let id = localStorage.getItem('tsb_hub_device_id');
+  let id = TSBStorage.get(DEVICE_ID_KEY);
   if (!id) {
     id = `device_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    localStorage.setItem('tsb_hub_device_id', id);
+    TSBStorage.set(DEVICE_ID_KEY, id);
   }
   return id;
 }
 
+function storageGet(key) {
+  return TSBStorage.get(key);
+}
+
+function storageSet(key, value) {
+  return TSBStorage.set(key, value);
+}
+
 function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = storageGet(STORAGE_KEY);
   if (raw) {
     try {
       const normalized = normalizeData(JSON.parse(raw));
@@ -172,7 +185,7 @@ function saveData(data = app, markModified = true) {
     data.meta.lastModified = new Date().toISOString();
     data.meta.changeCounter = Number(data.meta.changeCounter || 0) + 1;
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return storageSet(STORAGE_KEY, JSON.stringify(data));
 }
 
 function markChanged() {
@@ -182,7 +195,7 @@ function markChanged() {
 
 function migrateOldLocalStorage(target) {
   let migrated = false;
-  const oldTasksRaw = localStorage.getItem(OLD_TSB_KEY);
+  const oldTasksRaw = storageGet(OLD_TSB_KEY);
   if (oldTasksRaw) {
     try {
       const oldTasks = JSON.parse(oldTasksRaw);
@@ -214,7 +227,7 @@ function migrateOldLocalStorage(target) {
     }
   }
 
-  const oldHealthRaw = localStorage.getItem(OLD_HEALTH_KEY);
+  const oldHealthRaw = storageGet(OLD_HEALTH_KEY);
   if (oldHealthRaw) {
     try {
       const oldHealth = JSON.parse(oldHealthRaw);
@@ -242,7 +255,7 @@ function migrateOldLocalStorage(target) {
     }
   }
 
-  const oldSettingsRaw = localStorage.getItem(OLD_HEALTH_SETTINGS_KEY);
+  const oldSettingsRaw = storageGet(OLD_HEALTH_SETTINGS_KEY);
   if (oldSettingsRaw) {
     try {
       const oldSettings = JSON.parse(oldSettingsRaw);
@@ -484,17 +497,6 @@ function moneyNumber(value) {
   return Number(String(value || '0').replace(',', '.')) || 0;
 }
 
-function setAvailableBalance(value) {
-  getFinanceContext().availableBalance = normalizeMoneyInput(value);
-}
-
-function addAvailableBalance(delta) {
-  const context = getFinanceContext();
-  const current = moneyNumber(context.availableBalance);
-  const next = Math.round((current + Number(delta || 0)) * 100) / 100;
-  context.availableBalance = String(Object.is(next, -0) ? 0 : next);
-}
-
 function addFinanceOperation(type, amount, title, comment = '', sourceId = '', date = state.selectedDate) {
   const context = getFinanceContext();
   context.operations.unshift({
@@ -508,19 +510,6 @@ function addFinanceOperation(type, amount, title, comment = '', sourceId = '', d
     createdAt: new Date().toISOString()
   });
   context.operations = context.operations.slice(0, 250);
-}
-
-function applyBalanceCorrection(newBalance) {
-  const context = getFinanceContext();
-  const normalized = normalizeSignedMoneyInput(newBalance);
-  if (!normalized) {
-    context.availableBalance = '';
-    return 0;
-  }
-  const diff = Math.round((moneyNumber(normalized) - moneyNumber(context.availableBalance)) * 100) / 100;
-  context.availableBalance = normalized;
-  if (diff !== 0) addFinanceOperation('adjustment', diff, diff < 0 ? 'Корректировка: неуказанные расходы' : 'Корректировка баланса', 'Ручное уточнение доступной суммы', '', state.selectedDate);
-  return diff;
 }
 
 function getFinanceContext() {
@@ -1242,20 +1231,19 @@ function renderToday() {
     <section class="grid-2">
       <div class="card today-input-card">
         <div class="card-title-row"><h2>Задачи дня</h2><button class="ghost-button small" data-tab-target="plans">Планы</button></div>
-        ${renderTaskAddForm(state.selectedDate, 'today')}
+        ${renderCollapsedBlock('Добавить задачу', renderTaskAddForm(state.selectedDate, 'today'), '', { key: `today-task-entry-${state.selectedDate}` })}
         ${renderCollapsedBlock('Показать задачи дня', `<div class="task-list" style="margin-top:12px">${renderTaskList(state.selectedDate, true)}</div>`, `${progress.total}`, { key: `today-tasks-${state.selectedDate}` })}
       </div>
       <div class="card today-input-card">
         <div class="card-title-row"><h2>Питание дня</h2><button class="ghost-button small" data-tab-target="food">Питание</button></div>
-        ${renderMealAddForm('today')}
+        ${renderCollapsedBlock('Добавить питание', renderMealAddForm('today'), '', { key: `today-food-entry-${state.selectedDate}` })}
         ${renderCollapsedBlock('Показать питание дня', `<div class="meal-list" style="margin-top:12px">${renderMealList(state.selectedDate)}</div>`, `${health.meals.length}`, { key: `today-food-${state.selectedDate}` })}
       </div>
       <div class="card today-input-card today-finance-card">
         <div class="card-title-row"><h2>Финансы дня</h2><button class="ghost-button small" data-tab-target="finance">Финансы</button></div>
         <div class="finance-summary-line finance-v2-today-free">Свободно: <strong>${formatRub(financeFreeMoney)}</strong></div>
-        ${renderFinanceQuickForm('today')}
+        ${renderCollapsedBlock('Добавить расход', renderFinanceQuickForm('today'), '', { key: `today-finance-entry-${state.selectedDate}` })}
         <div class="finance-summary-line">Потрачено за день: ${formatRub(financeSummary.total)} · еда: ${formatRub(financeSummary.food)} · транспорт: ${formatRub(financeSummary.transport)} · другое: ${formatRub(financeSummary.other)}</div>
-        ${renderFinanceNoExpensesButton(state.selectedDate)}
         ${renderCollapsedBlock('Показать операции дня', `<div class="finance-list" style="margin-top:12px">${renderFinanceList(state.selectedDate, true)}</div>`, `${financeSummary.count}`, { key: `today-finance-${state.selectedDate}` })}
       </div>
       ${renderDailyReportCard()}
@@ -1628,6 +1616,7 @@ function financeTransactionsCsv(rows=getFinanceTransactions()) {
 function buildFinanceExportObject() {
   const finance=TSBFinanceCore.normalizeFinance(getFinanceStateV2());const coverage=getFinanceCoverage();
   return {
+    backupType:FINANCE_BACKUP_TYPE,formatVersion:BACKUP_FORMAT_VERSION,
     exportedAt:new Date().toISOString(),appVersion:APP_VERSION,financeSchemaVersion:finance.schemaVersion,
     balances:{total:coverage.totalAccounts,reserved:coverage.reserved,upcoming:coverage.upcoming,free:coverage.free,accounts:finance.accounts.map(account=>({id:account.id,name:account.name,balance:getFinanceAccountBalance(account.id),active:account.active,archived:account.archived,isDefault:account.isDefault}))},
     finance
@@ -1987,29 +1976,6 @@ function renderFinance() {
   bindFinanceV2Screen(root);
 }
 
-function renderFinanceGoalsForm(context) {
-  const goals = parseFinanceGoals(context.savingGoal);
-  const goalCard = (index) => {
-    const goal = goals[index] || {};
-    const n = index + 1;
-    return `
-      <div class="finance-goal-card">
-        <div class="finance-goals-head">Цель ${n}</div>
-        <label>Что нужно<input name="goalTitle${n}" placeholder="Напр. собрать компьютер" value="${escapeHTML(goal.title || '')}"></label>
-        <label>Сумма<input name="goalAmount${n}" placeholder="Напр. 80000 ₽" value="${escapeHTML(goal.amount || '')}"></label>
-        <label>Срок<input name="goalTerm${n}" placeholder="Напр. 3–4 месяца / до декабря" value="${escapeHTML(goal.term || '')}"></label>
-        <label>Комментарий<input name="goalComment${n}" placeholder="Приоритет, условия, что важно учесть" value="${escapeHTML(goal.comment || '')}"></label>
-      </div>
-    `;
-  };
-  return `
-    <form class="finance-goals-list" data-finance-goals-form>
-      ${[0, 1, 2].map(goalCard).join('')}
-      <button class="primary-button" type="submit">Сохранить цели</button>
-    </form>
-  `;
-}
-
 function parseFinanceGoals(value) {
   const lines = String(value || '').split(/\n+/).map(line => line.trim()).filter(Boolean).slice(0, 3);
   return lines.map(line => {
@@ -2030,52 +1996,6 @@ function parseFinanceGoals(value) {
   });
 }
 
-function serializeFinanceGoals(fd) {
-  const goals = [];
-  for (let n = 1; n <= 3; n += 1) {
-    const title = String(fd.get(`goalTitle${n}`) || '').trim();
-    const amount = String(fd.get(`goalAmount${n}`) || '').trim();
-    const term = String(fd.get(`goalTerm${n}`) || '').trim();
-    const comment = String(fd.get(`goalComment${n}`) || '').trim();
-    if (!title && !amount && !term && !comment) continue;
-    goals.push(`Цель: ${title || 'не указана'}${amount ? ` | Сумма: ${amount}` : ''}${term ? ` | Срок: ${term}` : ''}${comment ? ` | Комментарий: ${comment}` : ''}`);
-  }
-  return goals.join('\n');
-}
-
-function splitFinanceGoals(value) {
-  return parseFinanceGoals(value).map(goal => [goal.title, goal.amount, goal.term, goal.comment].filter(Boolean).join(' · '));
-}
-
-function renderFinanceNoExpensesButton() {
-  return '';
-}
-
-function renderFinanceDaySummary(summary) {
-  return `
-    <div class="finance-day-summary">
-      <div class="stat-card"><div class="muted">Потрачено за день</div><div class="stat-value small-stat">${formatRub(summary.total)}</div><div class="muted">Записей: ${summary.count}</div></div>
-      <div class="stat-card"><div class="muted">Еда</div><div class="stat-value small-stat">${formatRub(summary.food)}</div></div>
-      <div class="stat-card"><div class="muted">Транспорт</div><div class="stat-value small-stat">${formatRub(summary.transport)}</div></div>
-      <div class="stat-card"><div class="muted">Другое</div><div class="stat-value small-stat">${formatRub(summary.other)}</div></div>
-    </div>`;
-}
-
-function renderFinancePlanForm(type) {
-  const today = state.selectedDate;
-  const titleLabel = type === 'income' ? 'Источник' : 'Что оплатить';
-  const placeholder = type === 'income' ? 'З/п, подработка' : 'Аренда, связь, транспорт';
-  return `
-    <form class="form-grid finance-plan" data-finance-plan-form="${type}">
-      <label>Сумма, ₽<input name="amount" required inputmode="decimal" placeholder="Напр. 5000"></label>
-      <label>Дата${renderDateControl('date', today)}</label>
-      <label>${titleLabel}<input name="title" placeholder="${placeholder}"></label>
-      <label>Комментарий<input name="comment" placeholder="Необязательно"></label>
-      <button class="primary-button" type="submit">Добавить</button>
-    </form>
-  `;
-}
-
 function getPlanItemStatusText(item, type) {
   if (type === 'income' && item.status === 'received') return 'получено';
   if (type === 'obligation' && item.status === 'paid') return 'оплачено';
@@ -2083,59 +2003,6 @@ function getPlanItemStatusText(item, type) {
   if (item.date && item.date < today) return type === 'income' ? 'просрочено' : 'просрочен';
   if (item.date === today) return 'сегодня';
   return 'ожидается';
-}
-
-function renderFinancePlanList(type) {
-  const context = getFinanceContext();
-  const list = type === 'income' ? context.incomes : context.obligations;
-  const doneStatus = type === 'income' ? 'received' : 'paid';
-  const active = list.filter(item => item.status !== doneStatus);
-  if (!active.length) return `<div class="empty">${type === 'income' ? 'Активных поступлений пока нет.' : 'Активных обязательных расходов пока нет.'}</div>`;
-  const sorted = [...active].sort((a, b) => String(a.date || '9999-99-99').localeCompare(String(b.date || '9999-99-99')));
-  return sorted.map(item => `
-      <article class="finance-card">
-        <div class="item-top">
-          <div>
-            <div class="badge-row">
-              <span class="badge important">${item.date ? shortDate(item.date) : 'без даты'}</span>
-              <span class="badge secondary">${escapeHTML(getPlanItemStatusText(item, type))}</span>
-            </div>
-            <h3>${type === 'income' ? '+' : '−'}${formatRub(item.amount)}</h3>
-            <p class="muted">${escapeHTML(item.title || (type === 'income' ? 'Поступление' : 'Расход'))}${item.comment ? ` · ${escapeHTML(item.comment)}` : ''}</p>
-          </div>
-          <div class="actions">
-            <button class="primary-button" data-finance-plan-complete="${item.id}" data-plan-type="${type}">${type === 'income' ? 'Получено' : 'Оплачено'}</button>
-            <button class="ghost-button" data-finance-plan-edit="${item.id}" data-plan-type="${type}">Изм.</button>
-            <button class="danger-button" data-finance-plan-delete="${item.id}" data-plan-type="${type}">Удал.</button>
-          </div>
-        </div>
-      </article>
-    `).join('');
-}
-
-function renderFinanceOperationsHistory() {
-  const operations = [...getFinanceContext().operations].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).slice(0, 80);
-  if (!operations.length) return '<div class="empty">История пока пустая.</div>';
-  const typeLabel = {
-    expense: 'трата',
-    income: 'поступление',
-    obligation: 'обязательный расход',
-    adjustment: 'корректировка'
-  };
-  return operations.map(op => `
-    <article class="finance-card operation-card">
-      <div class="item-top">
-        <div>
-          <div class="badge-row"><span class="badge secondary">${escapeHTML(typeLabel[op.type] || 'операция')}</span><span class="badge">${shortDate(op.date)}</span></div>
-          <h3>${moneyNumber(op.amount) > 0 ? '+' : ''}${formatRub(op.amount)}</h3>
-          <p class="muted">${escapeHTML(op.title || 'Операция')}${op.comment ? ` · ${escapeHTML(op.comment)}` : ''}</p>
-        </div>
-        <div class="actions">
-          ${op.type === 'adjustment' ? `<button class="danger-button" data-finance-operation-delete="${op.id}">Удал.</button>` : ''}
-        </div>
-      </div>
-    </article>
-  `).join('');
 }
 
 function renderFinanceQuickForm(scope) {
@@ -2178,13 +2045,6 @@ function renderFinanceCard(transaction, compact = false) {
       </div>
     </article>
   `;
-}
-
-function openFinanceHelpDialog() {
-  openInfoDialog({
-    title: 'Как быстро заполнять финансы',
-    message: `Заполняй только то, что реально поможет потом получить хороший анализ от GPT.\n\nМинимум: сумма и категория.\nПричина нужна, когда трата связана с состоянием: стресс, усталость, импульс, награда или лень.\nКомментарий нужен только если без него потом будет непонятно, что это было.\n\nПример: 350 ₽ · Еда · Стресс · купил перекус вечером.\n\nНе нужно превращать это в бухгалтерию: банковские счета, чеки и сложные бюджеты здесь специально не добавлены.`
-  });
 }
 
 function renderImportant() {
@@ -2250,7 +2110,7 @@ function renderSync() {
     </section>
   `;
   bindClick(root, '#exportDataBtn', exportData);
-  bindClick(root, '#copyDataBtn', () => copyText(JSON.stringify(app, null, 2)));
+  bindClick(root, '#copyDataBtn', () => copyText(JSON.stringify(buildFullBackupObject(), null, 2)));
   bindClick(root, '#importDataBtn', () => $('#importDataInput', root)?.click());
   const importInput = $('#importDataInput', root);
   if (importInput) {
@@ -3158,7 +3018,7 @@ function findTask(iso, id) {
 
 function exportData() {
   try {
-    const exportObject = normalizeData(JSON.parse(JSON.stringify(app)));
+    const exportObject = buildFullBackupObject();
     exportObject.meta.lastExported = new Date().toISOString();
     app.meta.lastExported = exportObject.meta.lastExported;
     saveData(app, false);
@@ -3180,11 +3040,24 @@ function exportData() {
   }
 }
 
+function buildFullBackupObject() {
+  const exportObject = normalizeData(JSON.parse(JSON.stringify(app)));
+  exportObject.backupType = FULL_BACKUP_TYPE;
+  exportObject.formatVersion = BACKUP_FORMAT_VERSION;
+  return exportObject;
+}
+
 function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result || '{}'));
+      if (parsed?.backupType !== FULL_BACKUP_TYPE || parsed?.formatVersion !== BACKUP_FORMAT_VERSION) {
+        showToast(parsed?.backupType === FINANCE_BACKUP_TYPE
+          ? 'Finance JSON нельзя импортировать как полный backup'
+          : 'Неподдерживаемый формат backup');
+        return;
+      }
       const normalized = normalizeData(parsed);
       const currentModified = app.meta?.lastModified || '';
       const importedModified = normalized.meta?.lastModified || '';
@@ -3219,11 +3092,24 @@ function importData(file) {
 }
 
 function applyImportedData(normalized) {
-  app = normalizeData(normalized);
-  app.meta.appVersion = APP_VERSION;
-  app.meta.lastModified = new Date().toISOString();
-  app.meta.changeCounter = Number(app.meta.changeCounter || 0) + 1;
-  saveData(app, false);
+  const localDeviceId = getOrCreateDeviceId();
+  const localCounter = Number.isFinite(Number(app.meta?.changeCounter)) ? Math.max(0, Number(app.meta.changeCounter)) : 0;
+  const importedCounter = Number.isFinite(Number(normalized.meta?.changeCounter)) ? Math.max(0, Number(normalized.meta.changeCounter)) : 0;
+  const recovery = buildFullBackupObject();
+  if (!storageSet(RECOVERY_BACKUP_KEY, JSON.stringify({ ...recovery, recoveryCreatedAt: new Date().toISOString() }))) {
+    showToast('Импорт отменён: не удалось создать recovery backup');
+    return;
+  }
+  const imported = normalizeData(normalized);
+  imported.meta.appVersion = APP_VERSION;
+  imported.meta.deviceId = localDeviceId;
+  imported.meta.lastModified = new Date().toISOString();
+  imported.meta.changeCounter = Math.max(localCounter, importedCounter) + 1;
+  if (!saveData(imported, false)) {
+    showToast('Импорт отменён: не удалось записать базу');
+    return;
+  }
+  app = imported;
   renderAll();
   showToast('Данные импортированы');
 }
@@ -3321,26 +3207,6 @@ function showToast(message) {
 }
 
 
-function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
-  // Начиная с 0.7 service worker включён даже в dev-сборках, потому что мы тестируем PWA через GitHub Pages.
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./service-worker.js?v=0.13.3-finance-transaction-control-20260808')
-      .then(registration => {
-        registration.addEventListener('updatefound', () => {
-          const worker = registration.installing;
-          if (!worker) return;
-          worker.addEventListener('statechange', () => {
-            if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-              showToast('Доступна новая версия. Обнови страницу.');
-            }
-          });
-        });
-      })
-      .catch(error => console.warn('Service worker не зарегистрирован:', error));
-  });
-}
-
 function getPwaStatusHTML() {
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const swSupported = 'serviceWorker' in navigator;
@@ -3406,7 +3272,6 @@ function setupEvents() {
   $$('.tab-button').forEach(btn => btn.onclick = () => setTab(btn.dataset.tab));
   setupMobileTabMenu();
 
-  registerServiceWorker();
 }
 
 setupEvents();

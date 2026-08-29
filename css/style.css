@@ -1514,3 +1514,34 @@ body.input-focus .mobile-tab-fab { display: none !important; }
 @media (max-width: 900px) {
   .app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
 }
+
+/* Stage 2: calm, width-safe interaction contract. */
+:root {
+  --accent: #8b5cf6;
+  --surface-neutral: #172033;
+  --focus-ring: 0 0 0 3px rgba(139, 92, 246, .24);
+}
+html, body { max-width: 100%; overflow-x: hidden; }
+body, .app-shell, .layout, .content-panel, .tab-page, .card, .panel { min-width: 0; }
+button, input, select, textarea, summary, [role="button"] {
+  touch-action: manipulation;
+}
+button, summary, [role="button"] { min-height: var(--tap); }
+input, select, textarea { min-height: var(--tap); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
+summary:focus-visible, [role="button"]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+body, .card, .panel, .stat-card, .task-card, .meal-card, .important-card, .finance-card {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+img, svg, video, canvas { max-width: 100%; }
+@media (max-width: 900px) {
+  .app-shell { width: 100%; padding-inline: 10px; }
+  .date-switcher, .form-grid, .actions, .card-title-row { min-width: 0; }
+  .form-grid { gap: 8px; }
+  .actions button, .ghost-button.small { min-height: var(--tap); }
+  .week-grid { overflow-x: hidden; }
+}

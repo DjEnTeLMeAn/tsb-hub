@@ -3,12 +3,17 @@
   'use strict';
   const RELEASE='0.13.3-finance-transaction-control-20260808';
   const VERSION_URL='./version.json';
-  const RELOAD_KEY='tsb_hub_reload_'+RELEASE;
+  const RELEASE_PATTERN=/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$/i;
+  const MAX_RELEASE_LENGTH=128;
+  const RELOAD_KEY='tsb_hub_reload_release';
   const nativeRegister='serviceWorker' in navigator?navigator.serviceWorker.register.bind(navigator.serviceWorker):null;
   let activeRelease=RELEASE;
   let registration=null;
   let checking=false;
 
+  function validRelease(value){
+    return typeof value==='string'&&value.length>0&&value.length<=MAX_RELEASE_LENGTH&&RELEASE_PATTERN.test(value)?value:null;
+  }
   function swUrl(release=activeRelease){return `./service-worker.js?v=${encodeURIComponent(release)}`}
   function status(text){document.querySelectorAll('[data-tsb-update-status]').forEach(el=>el.textContent=text)}
   function toast(text){if(typeof window.showToast==='function')window.showToast(text)}
@@ -17,16 +22,29 @@
     const response=await fetch(`${VERSION_URL}?t=${Date.now()}`,{cache:'no-store',headers:{'Cache-Control':'no-cache'}});
     if(!response.ok)throw new Error(`version ${response.status}`);
     const data=await response.json();
-    return String(data.release||RELEASE);
+    const release=validRelease(data?.release);
+    if(!release)throw new Error('invalid version release');
+    return release;
   }
 
   async function registerRelease(release=RELEASE){
     if(!nativeRegister)return null;
-    activeRelease=release;
-    registration=await nativeRegister(swUrl(release),{scope:'./',updateViaCache:'none'});
+    const safeRelease=validRelease(release)||RELEASE;
+    registration=await nativeRegister(swUrl(safeRelease),{scope:'./',updateViaCache:'none'});
+    activeRelease=safeRelease;
     await registration.update().catch(()=>null);
     if(registration.waiting)registration.waiting.postMessage({type:'SKIP_WAITING'});
     return registration;
+  }
+
+  function reloadOnce(release){
+    if(sessionStorage.getItem(RELOAD_KEY)===release)return false;
+    sessionStorage.setItem(RELOAD_KEY,release);
+    const url=new URL('./index.html',location.href);
+    url.searchParams.set('v',release);
+    url.searchParams.set('refresh',Date.now());
+    location.replace(url.href);
+    return true;
   }
 
   async function check({manual=false,reload=false}={}){
@@ -39,12 +57,7 @@
       if(latest!==RELEASE){
         status(`Найдена версия ${latest}`);
         if(registration?.waiting)registration.waiting.postMessage({type:'SKIP_WAITING'});
-        if(reload){
-          const url=new URL('./index.html',location.href);
-          url.searchParams.set('v',latest);
-          url.searchParams.set('refresh',Date.now());
-          location.replace(url.href);
-        }
+        if(reload)reloadOnce(latest);
       }else{
         status(`Актуальная версия: ${RELEASE}`);
         if(manual)toast('Установлена актуальная версия');
@@ -80,12 +93,7 @@
 
   if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
-      if(sessionStorage.getItem(RELOAD_KEY))return;
-      sessionStorage.setItem(RELOAD_KEY,'1');
-      const url=new URL(location.href);
-      url.searchParams.set('v',activeRelease);
-      url.searchParams.set('sw',Date.now());
-      location.replace(url.href);
+      reloadOnce(activeRelease);
     });
   }
 

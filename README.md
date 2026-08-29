@@ -1,8 +1,17 @@
-# TSB Hub v0.8.21-dev
+# TSB Hub v0.13.3-finance-transaction-control-20260808
 
-Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Запуск локально: открыть `index.html`. Для телефона: загрузить папку на GitHub Pages и открыть через Chrome / установленное PWA.
+Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
-## Изменения 0.8.21-dev
+## Текущий релиз
+
+- Release: `0.13.3-finance-transaction-control-20260808`
+- Published: `2026-08-08T00:43:00+05:00`
+- Cache: `tsb-hub-0.13.3-finance-transaction-control-20260808`
+- Finance schema: `3`
+
+Запуск локально: открыть `index.html`. Для телефона загрузить папку на GitHub Pages и открыть через Chrome или установленное PWA.
+
+## Что входит в релиз
 
 - Доработаны ползунки ежедневного отчёта:
   - значения остаются дискретными: 0 / 25 / 50 / 75 / 100;
@@ -16,7 +25,7 @@
   - «В тот день» — задача закрывается в исходной дате;
   - «Сегодня» — задача засчитывается на сегодня, но сохраняет исходную дату для будущей статистики.
 - Для пропущенных задач сохраняются технические поля `originalDate`, `completedAt`, `completedForDate`, `completionMode`.
-- Исправлена финансовая логика:
+- Завершена финансовая система Finance v2/Part 3:
   - отрицательный доступный баланс теперь не превращается в плюс после перерендера;
   - ручная корректировка баланса остаётся обратимой через историю операций;
   - блоки «Плановые поступления» и «Обязательные расходы» снова можно сворачивать;
@@ -28,6 +37,21 @@
   - кнопка-книжка для навигации;
   - исправленный toast;
   - сохранение раскрытых списков.
+
+## Backup и импорт
+
+- Полный backup `tsb_data_YYYY-MM-DD.json` содержит нормализованный объект всей базы TSB Hub, включая финансовые коллекции и `meta`.
+- Импорт принимает только JSON-файл, повторно нормализует данные и перед заменой локальной базы показывает подтверждение.
+- Более старый backup импортируется только после отдельного подтверждения; исходный файл не изменяется.
+- Finance JSON и CSV операций — отдельные выгрузки. Finance JSON содержит `financeSchemaVersion`; CSV не является backup и не предназначен для обратного импорта.
+
+## PWA shell и обязательные файлы
+
+PWA shell кэширует текущие `index.html`, `manifest.json`, CSS, JavaScript и иконки через `service-worker.js`. Версия в `version.json` должна совпадать с release в HTML, manifest, service worker и cache-buster query-параметрах.
+
+Обязательные файлы: `index.html`, `manifest.json`, `version.json`, `service-worker.js`, `css/style.css`, `css/mobile-first-cleanup.css`, `css/mobile-dashboard.css`, `css/mobile-finance.css`, `css/confirm-dialog.css`, `js/update-manager.js`, `js/finance-core.js`, `js/app.js`, `js/mobile-first-cleanup.js`, `js/mobile-dashboard.js`, `icons/icon-192.png`, `icons/icon-512.png`.
+
+Проверка: `npm test`, `npm run lint`, `npm run build` (или bundled Node из инструкции релиза).
 
 ## Важно
 

@@ -8,6 +8,8 @@
   function findCard(kind){const title=targetMap[kind];return qsa('#tab-today .card').find(card=>text(qs('h2',card))===title)||null}
   function focusCard(kind){
     const card=findCard(kind);if(!card)return;
+    const entry=card.querySelector('details.today-details');
+    if(entry)entry.open=true;
     card.classList.add('dashboard-target-highlight');
     card.scrollIntoView({behavior:'smooth',block:'center'});
     setTimeout(()=>card.classList.remove('dashboard-target-highlight'),900);

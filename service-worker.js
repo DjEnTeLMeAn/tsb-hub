@@ -10,6 +10,7 @@ const APP_SHELL=[
   `./css/confirm-dialog.css?v=${RELEASE}`,
   `./js/update-manager.js?v=${RELEASE}`,
   `./js/finance-core.js?v=${RELEASE}`,
+  `./js/storage.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,
@@ -20,7 +21,7 @@ function abs(path){return new URL(path,self.registration.scope).href}
 async function currentCache(){return caches.open(CACHE_NAME)}
 async function cacheFresh(cache,path){const request=new Request(abs(path),{cache:'reload'});const response=await fetch(request,{cache:'reload'});if(!response.ok)throw new Error(`${path}: ${response.status}`);await cache.put(request,response.clone())}
 async function precache(){const cache=await currentCache();await Promise.all(APP_SHELL.map(path=>cacheFresh(cache,path)))}
-async function clearOld(){const keys=await caches.keys();await Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))}
+async function clearOld(){const keys=await caches.keys();await Promise.all(keys.filter(key=>key.startsWith('tsb-hub-')&&key!==CACHE_NAME).map(key=>caches.delete(key)))}
 async function notify(message){const clients=await self.clients.matchAll({type:'window',includeUncontrolled:true});clients.forEach(client=>client.postMessage(message))}
 async function networkFirst(request,fallback=''){
   try{

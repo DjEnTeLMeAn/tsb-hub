@@ -81,7 +81,10 @@ assert.equal(app.includes("$$('[data-finance-context-form]', root)"),false,'lega
 assert.equal(app.includes("$$('[data-finance-plan-complete]', root)"),false,'legacy plan completion binder remains');
 assert.equal(index.includes('finance-module-v2.js'),false,'Finance Part2 override module must not exist');
 assert.equal(fs.existsSync('js/finance-module-v2.js'),false,'Finance Part2 override file must not exist');
-assert.ok(app.includes(`service-worker.js?v=0.13.3-finance-transaction-control-20260808`),'direct service worker registration must use current release');
+assert.equal(app.includes('navigator.serviceWorker.register'),false,'app must not register the service worker directly');
+const updateManager=fs.readFileSync('js/update-manager.js','utf8');
+assert.ok(updateManager.includes("const RELEASE='0.13.3-finance-transaction-control-20260808'"),'update manager must own current service worker release');
+assert.ok(updateManager.includes('service-worker.js?v=')&&updateManager.includes('nativeRegister(swUrl('),'update manager must own service worker registration');
 assert.ok(sw.includes(`const RELEASE='0.13.3-finance-transaction-control-20260808'`),'service worker release mismatch');
 const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
 const version=JSON.parse(fs.readFileSync('version.json','utf8'));

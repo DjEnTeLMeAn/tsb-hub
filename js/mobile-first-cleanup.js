@@ -2,9 +2,9 @@
 (function(){
   'use strict';
 
-  const PRIMARY_TABS=new Set(['today','plans','finance']);
-  const TAB_LABELS={today:'Сегодня',plans:'Планы',finance:'Финансы',important:'Важное',sync:'Синхронизация',settings:'Настройки'};
-  const TAB_ICONS={today:'●',plans:'✓',finance:'₽',important:'!',sync:'↔',settings:'⚙'};
+  const PRIMARY_TABS=new Set(['today','food','finance']);
+  const TAB_LABELS={today:'Сегодня',food:'Питание',plans:'Планы',finance:'Финансы',important:'Важное',sync:'Синхронизация',settings:'Настройки'};
+  const TAB_ICONS={today:'●',food:'⌁',plans:'✓',finance:'₽',important:'!',sync:'↔',settings:'⚙'};
   const INPUT_SELECTOR='input, textarea, select, [contenteditable="true"]';
   let baselineViewportHeight=0,focusTimer=0,usageTimer=0,patchTimer=0;
   let reportWrapped=false,stableRenderWrapped=false,financeInsightsWrapped=false,plansWeekRerendering=false;
@@ -127,7 +127,6 @@
   function patchTodayWeight(){const root=qs('#tab-today.active');if(!root||qs('[data-mf-weight-card]',root)||!shouldShowWeightPrompt())return;const card=document.createElement('section');card.className='card today-input-card';card.dataset.mfWeightCard='true';card.innerHTML=`<div class="card-title-row"><h2>Вес недели</h2></div>${weightFormHTML('today')}`;root.prepend(card);bindWeightForms(card)}
   function patchSettingsWeight(){const root=qs('#tab-settings');if(!root||qs('[data-mf-settings-weight]',root))return;const card=document.createElement('section');card.className='card settings-weight-card';card.dataset.mfSettingsWeight='true';card.innerHTML=`<div class="card-title-row"><h2>Вес сейчас</h2></div>${weightFormHTML('settings')}`;root.appendChild(card);bindWeightForms(card)}
 
-  function patchFoodRemoval(){qsa('[data-tab="food"],[data-tab-target="food"]').forEach(el=>{el.hidden=true;el.style.display='none'});const page=qs('#tab-food');if(page)page.hidden=true;if(currentTab()==='food'&&typeof setTab==='function')setTab('today')}
   function patchTodayHeaderButtons(){const root=qs('#tab-today');if(!root)return;qsa('.card-title-row [data-tab-target="plans"],.card-title-row [data-tab-target="finance"],.card-title-row [data-tab-target="food"]',root).forEach(btn=>btn.remove());const line=qs('.today-finance-card .finance-summary-line',root);if(line&&!line.dataset.mfNoAssets){line.textContent=line.textContent.replace(/\s*·\s*активы:[^·]*/i,'');line.dataset.mfNoAssets='1'}}
 
   function patchPlansWeekOnly(){
@@ -208,7 +207,7 @@
   }
   function patchTodayFinanceEdit(){const root=qs('#tab-today');if(!root)return;qsa('.today-finance-card .finance-card',root).forEach(card=>{const del=card.querySelector('[data-finance-delete]');if(!del)return;const id=del.dataset.financeDelete;let edit=card.querySelector(`[data-mf-finance-edit="${id}"]`);if(!edit){edit=document.createElement('button');edit.type='button';edit.className='ghost-button mf-icon-action';edit.dataset.mfFinanceEdit=id;edit.dataset.date=selectedDate();edit.title='Изменить и добавить описание';edit.setAttribute('aria-label','Изменить трату');edit.textContent='✎';del.parentElement?.insertBefore(edit,del)}edit.onclick=event=>{event.preventDefault();event.stopPropagation();editTodayFinance(edit)}})}
 
-  function patchScreens(){patchFoodRemoval();patchPlansWeekOnly();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();patchTodayHeaderButtons();patchFinanceNoExpenseState();patchCollapsibleSummaries(document);patchDailyReportLabels();patchTaskControls(document);patchTodayFinanceEdit();patchActionButtonText(document);bindWeightForms(document)}
+  function patchScreens(){patchPlansWeekOnly();patchTodayWeight();patchSettingsWeight();patchSettingsUsage();patchTodayHeaderButtons();patchFinanceNoExpenseState();patchCollapsibleSummaries(document);patchDailyReportLabels();patchTaskControls(document);patchTodayFinanceEdit();patchActionButtonText(document);bindWeightForms(document)}
 
   function setupInputFocusGuard(){
     initViewportBaseline();

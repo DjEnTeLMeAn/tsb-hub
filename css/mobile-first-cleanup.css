@@ -10,6 +10,15 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
 @media(max-width:430px){body .actions{grid-template-columns:1fr!important}body .card-title-row{gap:7px!important}body .task-card,body .meal-card,body .important-card,body .finance-card{padding:11px!important}.daily-report-status .summary-chip{font-size:.72rem!important;padding:3px 4px!important}}
 @media(max-width:380px){body .tabs{gap:5px!important;padding:6px!important}body .tab-button,body .mobile-tab-button{font-size:.67rem!important;min-height:44px!important;height:44px!important}.mobile-tab-button .more-current{font-size:.58rem}body .mobile-tab-fab{right:14px!important;bottom:calc(var(--mf-nav-bottom) + 6px)!important;width:calc((100vw - 16px - 12px - 15px) / 4)!important}}
 
+/* Main mobile destinations: Today, Food and Finance. Plans stay in More. */
+.tab-button[data-tab="food"], [data-tab-target="food"] { display: inline-flex !important; }
+#tab-food[hidden] { display: none !important; }
+@media(max-width:900px){
+  body .tabs .tab-button[data-tab="plans"] { display: none !important; }
+  body .tabs .tab-button[data-tab="food"] { display: inline-flex !important; }
+  body .mobile-tab-menu [data-tab-target="food"] { display: none !important; }
+}
+
 /* Compact action semantics: confirm, edit and delete are equally sized icon actions. */
 .mf-icon-action svg{width:16px!important;height:16px!important;display:block!important;pointer-events:none!important}
 .mf-trash-action{color:#fecaca!important}
@@ -22,3 +31,23 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
 .edit-dialog .modal-actions [data-modal-cancel]{display:none!important}
 .edit-dialog .modal-actions .primary-button[type="submit"]{width:38px!important;height:38px!important;min-width:38px!important;min-height:38px!important;max-width:38px!important;padding:0!important;border-radius:999px!important;font-size:0!important;display:grid!important;place-items:center!important;line-height:1!important;color:#dcfce7!important;background:rgba(34,197,94,.22)!important;border:1px solid rgba(34,197,94,.55)!important;box-shadow:0 0 0 3px rgba(34,197,94,.07)!important}
 .edit-dialog .modal-actions .primary-button[type="submit"]::after{content:'✓';font-size:1rem!important;font-weight:900!important;line-height:1!important;display:block!important}
+
+/* Stage 2 mobile finish: compact fields, wrapped copy, and visible menu states. */
+@media(max-width:900px){
+  body .app-header,body .tabs,body .mobile-tab-fab,body .mobile-tab-menu{max-width:100vw}
+  body .mobile-tab-menu{max-height:calc(100dvh - 120px);overflow-y:auto;overscroll-behavior:contain}
+  body .mobile-tab-menu button{min-height:44px;white-space:normal;overflow-wrap:anywhere}
+  body .card-title-row h2,body .card-title-row p,body .task-text,body .finance-v2-account,
+  body .finance-v2-operation,body .important-content,body .code{min-width:0;overflow-wrap:anywhere}
+  body input,body select,body textarea{padding:8px 10px}
+  body .actions button,body .mf-icon-action{min-height:44px!important}
+  body .mf-icon-action{width:44px!important;min-width:44px!important;height:44px!important;max-width:44px!important}
+  body details>summary{min-height:44px!important;touch-action:manipulation}
+}
+@media(min-width:901px){
+  body .mobile-tab-menu{max-width:min(360px,calc(100vw - 24px));overflow-wrap:anywhere}
+}
+
+/* The Food page is hidden only while inactive; the legacy selector above must not hide it after activation. */
+body .tab-page#tab-food:not([hidden]){display:block!important}
+@media(max-width:900px){body .tabs .tab-button[data-tab="food"]:not([data-tab="today"]):not([data-tab="plans"]):not([data-tab="finance"]){display:inline-flex!important}}

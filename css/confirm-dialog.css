@@ -83,3 +83,11 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   }
 }
+
+/* Stage 2 dialog state: viewport-safe, scrollable, and both actions reachable. */
+.modal-dialog[open]{display:grid;place-items:center;max-width:100vw;max-height:100dvh;overflow:auto}
+.modal-dialog[open] .modal-card{width:100%;max-width:100%;max-height:calc(100dvh - 24px);overflow:auto;overflow-wrap:anywhere}
+.modal-dialog button,.modal-dialog input,.modal-dialog select,.modal-dialog textarea{min-height:44px;touch-action:manipulation}
+.modal-dialog button:focus-visible,.modal-dialog input:focus-visible,.modal-dialog select:focus-visible,
+.modal-dialog textarea:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(139,92,246,.24)}
+@media(max-width:600px){.modal-dialog{width:100%;padding:8px}.modal-dialog[open] .modal-card{max-height:calc(100dvh - 16px);border-radius:16px}.modal-dialog .modal-actions{grid-template-columns:repeat(2,minmax(0,1fr))!important}.modal-dialog .modal-actions>*{min-width:0!important}}

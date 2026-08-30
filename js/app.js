@@ -1245,22 +1245,17 @@ function renderTasks() {
   const total = week.reduce((sum, item) => sum + item.total, 0);
   const done = week.reduce((sum, item) => sum + item.done, 0);
   const pct = total ? Math.round(done / total * 100) : 0;
-  const remaining = tasks.filter(task => !task.done && !task.dismissed).length;
-  const subtasks = tasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
-  const completedSubtasks = tasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
   const health = getHealth(state.selectedDate);
   const dayNote = health.note || health.activityNote || '';
-  const weeklyInsight = total
-    ? (pct >= 70 ? `Хороший темп: ${done} из ${total} задач закрыто.` : `На этой неделе закрыто ${done} из ${total} задач. Оставь в фокусе главное.`)
-    : 'Добавь первую задачу — так появится понятный ориентир на неделю.';
-  root.innerHTML = `
+  root.innerHTML = `<section class="page-heading"><div><h1>Задачи</h1></div></section>
     <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow">Завтра</button></nav>
-    <section class="card today-summary-compact" style="min-height:118px;box-sizing:border-box"><div class="card-title-row compact-title-row"><div><h2>${state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня'}</h2><p class="muted">Короткая сводка задач.</p></div></div><div class="summary-chip-row"><span class="summary-chip">Готово ${tasks.filter(task => task.done).length}/${tasks.length}</span><span class="summary-chip">Осталось ${remaining}</span>${subtasks ? `<span class="summary-chip">Шаги ${completedSubtasks}/${subtasks}</span>` : '<span class="summary-chip">Шагов пока нет</span>'}</div></section>
-    <section class="section-block task-primary-action-block"><button class="primary-button task-primary-action" style="height:52px;min-height:52px" type="button" data-task-add aria-expanded="false">+ Добавить задачу</button><div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div></section>
-    <section class="section-block"><div class="section-heading"><h2>Задачи</h2><span class="muted">${tasks.length}</span></div><div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div></section>
+    <section class="section-block"><div class="section-heading"><h2>${state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня'} · ${tasks.length} задач</h2><button class="primary-button compact-action" type="button" data-task-add aria-expanded="false">+ Добавить</button></div>
+      <div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div>
+      <div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
+    </section>
     ${renderCollapsedBlock('Заметка дня', `<form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Что важно помнить сегодня?">${escapeHTML(dayNote)}</textarea><button class="ghost-button" type="submit">Сохранить заметку</button></form>`, dayNote ? 'есть' : '', { key: `tasks-day-note-${state.selectedDate}` })}
     ${renderCollapsedBlock('Челленджи', '<div class="empty">Челленджи пока не настроены.</div>', '', { key: `tasks-challenges-${state.selectedDate}` })}
-    <section class="card weekly-insight-card"><div class="card-title-row"><div><h2>Недельный инсайт</h2><p class="muted">${escapeHTML(weeklyInsight)}</p></div></div><div class="summary-chip-row"><span class="summary-chip">${pct}% выполнения</span><span class="summary-chip">${done}/${total} за неделю</span></div></section>`;
+    <section class="section-block weekly-statistics"><div class="section-heading"><h2>Прогресс недели</h2></div><div class="metric-row"><strong>${pct}%</strong><span class="weekly-stat-detail">${done}/${total} выполнено</span></div><div class="progress"><span style="width:${pct}%"></span></div></section>`;
   root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
   root.querySelector('[data-task-add]')?.addEventListener('click', event => {
     const formWrap = root.querySelector('[data-task-add-form]');
@@ -2361,7 +2356,7 @@ function renderTaskCard(task, iso, compact = false) {
   const stepProgress = task.totalSubtasks ? `<span class="muted task-progress">Шаги ${task.completedSubtasks}/${task.totalSubtasks}</span>` : '';
   const actions = compact
     ? `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Разбить на шаги</button><button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button><button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>`
-    : `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Подзадачи</button><button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button><button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>`;
+    : `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Разбить на шаги</button><button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button><button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>`;
   return `<details class="task-card task-details ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}"><summary><div class="task-top"><div class="task-main"><input type="checkbox" data-task-toggle="${task.id}" data-date="${iso}" ${task.done ? 'checked' : ''} aria-label="Выполнено"><span class="task-text">${escapeHTML(task.text)}</span>${time ? `<time class="task-time">${escapeHTML(time)}</time>` : ''}</div><div class="badge-row">${statusBadges}${stepProgress}</div></div></summary><div class="task-details-body">${task.totalSubtasks ? `<p class="muted">Шаги: ${task.completedSubtasks}/${task.totalSubtasks}</p>` : ''}${subtasks}<div class="actions">${actions}</div></div></details>`;
 }
 

@@ -443,6 +443,42 @@ textarea:focus {
   border-radius: 10px !important;
 }
 
+/* Tasks controls: compact action width and card rhythm. */
+#tab-tasks [data-task-add],
+#tab-tasks .compact-action {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  height: 46px;
+  min-height: 46px !important;
+  padding-inline: 14px;
+}
+
+#tab-tasks .task-card {
+  min-height: 72px;
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+#tab-tasks .weekly-statistics {
+  min-height: 0;
+  padding: 12px 14px;
+  gap: 8px;
+}
+
+#tab-tasks .weekly-statistics .section-heading,
+#tab-tasks .weekly-statistics .metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+
+#tab-tasks .weekly-statistics .progress {
+  height: 8px;
+}
+
 .day-column { border: 0 !important; background: #19212C !important; }
 .finance-v2-section-nav { flex-wrap: wrap; overflow-x: visible; }
 

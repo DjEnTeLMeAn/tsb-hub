@@ -396,8 +396,25 @@ function renderDateControl(name, value = '', required = false) {
   return `<div class="date-input-row"><input name="${safeName}" type="text" inputmode="numeric" autocomplete="off" placeholder="дд.мм.гггг" value="${safeValue}" ${required ? 'required' : ''}><button class="icon-button date-picker-button" type="button" data-date-picker-for="${safeName}" title="Выбрать дату" aria-label="Выбрать дату">📅</button></div>`;
 }
 
+function normalizeTaskShape(task = {}) {
+  const subtasks = Array.isArray(task.subtasks) ? task.subtasks.map(sub => ({
+    id: sub?.id || uid('sub'),
+    text: String(typeof sub === 'string' ? sub : (sub?.text || '')).trim(),
+    done: typeof sub === 'string' ? false : Boolean(sub?.done)
+  })).filter(sub => sub.text) : [];
+  task.subtasks = subtasks;
+  task.totalSubtasks = subtasks.length;
+  task.completedSubtasks = subtasks.filter(sub => sub.done).length;
+  task.priority = normalizePriority(task.priority);
+  task.done = Boolean(task.done);
+  task.failed = Boolean(task.failed);
+  task.dismissed = Boolean(task.dismissed);
+  return task;
+}
+
 function getTasks(iso = state.selectedDate) {
   if (!app.tasks[iso]) app.tasks[iso] = [];
+  app.tasks[iso] = app.tasks[iso].map(normalizeTaskShape);
   return app.tasks[iso];
 }
 
@@ -1215,11 +1232,7 @@ function renderDailyReportCard() {
 }
 
 function renderTaskRow(task, iso) {
-  const time = task.time || task.dueTime || '';
-  return `<article class="task-card task-row ${task.done ? 'done' : ''}">
-    <div class="task-main"><input type="checkbox" data-task-toggle="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
-      <span class="task-text">${escapeHTML(task.text)}</span>${time ? `<time class="task-time">${escapeHTML(time)}</time>` : ''}</div>
-  </article>`;
+  return renderTaskCard(task, iso, true);
 }
 
 function renderTasks() {
@@ -1232,13 +1245,22 @@ function renderTasks() {
   const total = week.reduce((sum, item) => sum + item.total, 0);
   const done = week.reduce((sum, item) => sum + item.done, 0);
   const pct = total ? Math.round(done / total * 100) : 0;
-  root.innerHTML = `<section class="page-heading"><div><h1>Задачи</h1></div></section>
+  const remaining = tasks.filter(task => !task.done && !task.dismissed).length;
+  const subtasks = tasks.reduce((sum, task) => sum + task.totalSubtasks, 0);
+  const completedSubtasks = tasks.reduce((sum, task) => sum + task.completedSubtasks, 0);
+  const health = getHealth(state.selectedDate);
+  const dayNote = health.note || health.activityNote || '';
+  const weeklyInsight = total
+    ? (pct >= 70 ? `Хороший темп: ${done} из ${total} задач закрыто.` : `На этой неделе закрыто ${done} из ${total} задач. Оставь в фокусе главное.`)
+    : 'Добавь первую задачу — так появится понятный ориентир на неделю.';
+  root.innerHTML = `
     <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow">Завтра</button></nav>
-    <section class="section-block"><div class="section-heading"><h2>${state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня'} · ${tasks.length} задач</h2><button class="primary-button compact-action" type="button" data-task-add aria-expanded="false">+ Добавить</button></div>
-      <div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div>
-      <div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
-    </section>
-    <section class="section-block weekly-statistics"><div class="section-heading"><h2>Прогресс недели</h2></div><div class="metric-row"><strong>${pct}%</strong><span>${done}/${total} выполнено</span></div><div class="progress"><span style="width:${pct}%"></span></div></section>`;
+    <section class="card today-summary-compact" style="min-height:118px;box-sizing:border-box"><div class="card-title-row compact-title-row"><div><h2>${state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня'}</h2><p class="muted">Короткая сводка задач.</p></div></div><div class="summary-chip-row"><span class="summary-chip">Готово ${tasks.filter(task => task.done).length}/${tasks.length}</span><span class="summary-chip">Осталось ${remaining}</span>${subtasks ? `<span class="summary-chip">Шаги ${completedSubtasks}/${subtasks}</span>` : '<span class="summary-chip">Шагов пока нет</span>'}</div></section>
+    <section class="section-block task-primary-action-block"><button class="primary-button task-primary-action" style="height:52px;min-height:52px" type="button" data-task-add aria-expanded="false">+ Добавить задачу</button><div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div></section>
+    <section class="section-block"><div class="section-heading"><h2>Задачи</h2><span class="muted">${tasks.length}</span></div><div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div></section>
+    ${renderCollapsedBlock('Заметка дня', `<form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Что важно помнить сегодня?">${escapeHTML(dayNote)}</textarea><button class="ghost-button" type="submit">Сохранить заметку</button></form>`, dayNote ? 'есть' : '', { key: `tasks-day-note-${state.selectedDate}` })}
+    ${renderCollapsedBlock('Челленджи', '<div class="empty">Челленджи пока не настроены.</div>', '', { key: `tasks-challenges-${state.selectedDate}` })}
+    <section class="card weekly-insight-card"><div class="card-title-row"><div><h2>Недельный инсайт</h2><p class="muted">${escapeHTML(weeklyInsight)}</p></div></div><div class="summary-chip-row"><span class="summary-chip">${pct}% выполнения</span><span class="summary-chip">${done}/${total} за неделю</span></div></section>`;
   root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
   root.querySelector('[data-task-add]')?.addEventListener('click', event => {
     const formWrap = root.querySelector('[data-task-add-form]');
@@ -1422,7 +1444,7 @@ function renderFood() {
     ${renderFoodAiCard()}
     <section class="card"><div class="card-title-row"><div><h2>Блюда</h2><p class="muted">${health.meals.length} записей</p></div></div><div class="meal-list">${renderFoodMealPreview()}</div></section>
     ${renderCollapsedBlock('Добавить вручную', renderMealAddForm('food'), '', { key: `food-manual-${state.selectedDate}` })}
-    ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
+    ${renderCollapsedBlock('Вес', `<form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form>`, '', { key: `food-details-${state.selectedDate}` })}
     `;
   bindCommonActions(root);
   $('[data-food-ai-scan]', root)?.addEventListener('click', () => { getFoodAiState().status = 'selecting'; renderFood(); });
@@ -1432,7 +1454,6 @@ function renderFood() {
   $('[data-food-ai-save]', root)?.addEventListener('click', () => { const ai = getFoodAiState(); if (!ai.result) return; getHealth().meals.push({ id: uid('meal'), type: 'Приём пищи', name: ai.result.name, amount: `${Math.round(foodNumber(ai.result.calories))} ккал`, time: '', comment: 'Добавлено через AI demo', calories: foodNumber(ai.result.calories), protein: foodNumber(ai.result.protein), fat: foodNumber(ai.result.fat), carbs: foodNumber(ai.result.carbs), createdAt: new Date().toISOString() }); saveData(app, true); ai.status = 'saved'; renderFood(); showToast('AI-результат сохранён'); });
   $('[data-food-ai-discard]', root)?.addEventListener('click', () => { state.foodAi = { date: state.selectedDate, status: 'idle', result: null, error: '' }; renderFood(); });
   $('[data-weight-form]', root)?.addEventListener('submit', event => { event.preventDefault(); const fd = new FormData(event.currentTarget); getHealth(event.currentTarget.dataset.weightDate || weightISO).weight = normalizeWeightInput(fd.get('weight')) || null; markChanged(); showToast('Вес недели сохранён'); });
-  $('[data-day-note-form]', root)?.addEventListener('submit', event => { event.preventDefault(); getHealth().note = new FormData(event.currentTarget).get('note') || ''; markChanged(); showToast('Заметка дня сохранена'); });
 }
 
 
@@ -2306,7 +2327,7 @@ function renderTaskAddForm(iso, scope) {
     <form class="form-grid" data-task-form data-date="${iso}" data-scope="${scope}">
       <label>Новая задача<input name="text" required placeholder="Что нужно сделать"></label>
       <label>Время <span class="muted">(необязательно)</span><input name="time" type="time"></label>
-      <button class="primary-button" type="submit">Добавить</button>
+      <button class="ghost-button" type="submit">Добавить</button>
     </form>
   `;
 }
@@ -2324,7 +2345,9 @@ function priorityRank(priority) {
 }
 
 function renderTaskCard(task, iso, compact = false) {
+  normalizeTaskShape(task);
   const isPastIncomplete = iso < toISODate(new Date()) && !task.done && !task.dismissed;
+  const time = task.time || task.dueTime || '';
   const statusBadges = [
     `<span class="badge ${task.priority}">${PRIORITIES[task.priority] || 'Важно'}</span>`,
     task.done ? '<span class="badge done-badge">Выполнено</span>' : '',
@@ -2335,25 +2358,11 @@ function renderTaskCard(task, iso, compact = false) {
     <div class="subtasks">
       ${task.subtasks.map(sub => `<label class="subtask"><input type="checkbox" data-subtask-toggle="${task.id}" data-subtask-id="${sub.id}" ${sub.done ? 'checked' : ''}> <span>${escapeHTML(sub.text)}</span></label>`).join('')}
     </div>` : '';
-  return `
-    <article class="task-card ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}">
-      <div class="task-top">
-        <div class="task-main">
-          <input type="checkbox" data-task-toggle="${task.id}" data-date="${iso}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
-          <div>
-            <div class="task-text">${escapeHTML(task.text)}</div>
-            <div class="badge-row">${statusBadges}</div>
-          </div>
-        </div>
-        <div class="actions">
-          ${!compact ? `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Подзадачи</button>` : ''}
-          <button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button>
-          <button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>
-        </div>
-      </div>
-      ${subtasks}
-    </article>
-  `;
+  const stepProgress = task.totalSubtasks ? `<span class="muted task-progress">Шаги ${task.completedSubtasks}/${task.totalSubtasks}</span>` : '';
+  const actions = compact
+    ? `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Разбить на шаги</button><button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button><button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>`
+    : `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Подзадачи</button><button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button><button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>`;
+  return `<details class="task-card task-details ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}"><summary><div class="task-top"><div class="task-main"><input type="checkbox" data-task-toggle="${task.id}" data-date="${iso}" ${task.done ? 'checked' : ''} aria-label="Выполнено"><span class="task-text">${escapeHTML(task.text)}</span>${time ? `<time class="task-time">${escapeHTML(time)}</time>` : ''}</div><div class="badge-row">${statusBadges}${stepProgress}</div></div></summary><div class="task-details-body">${task.totalSubtasks ? `<p class="muted">Шаги: ${task.completedSubtasks}/${task.totalSubtasks}</p>` : ''}${subtasks}<div class="actions">${actions}</div></div></details>`;
 }
 
 function renderMealAddForm(scope) {
@@ -2828,6 +2837,14 @@ function bindCommonActions(root = document) {
   $$('[data-jump-date]', root).forEach(btn => btn.onclick = () => setSelectedDate(btn.dataset.jumpDate));
   $$('[data-daily-report-open]', root).forEach(btn => btn.onclick = openDailyReportDialog);
   $$('[data-local-insights-open]', root).forEach(btn => btn.onclick = openLocalInsightsDialog);
+  $$('[data-day-note-form]', root).forEach(form => {
+    form.onsubmit = event => {
+      event.preventDefault();
+      getHealth(state.selectedDate).note = String(new FormData(form).get('note') || '').trim();
+      markChanged();
+      showToast('Заметка дня сохранена');
+    };
+  });
   $$('[data-finance-no-expenses]', root).forEach(btn => {
     btn.onclick = () => {
       const iso = btn.dataset.financeNoExpenses || state.selectedDate;
@@ -2926,6 +2943,8 @@ function bindCommonActions(root = document) {
         failed: false,
         dismissed: false,
         subtasks: [],
+        completedSubtasks: 0,
+        totalSubtasks: 0,
         note: '',
         createdAt: new Date().toISOString(),
         originalDate: iso
@@ -2936,6 +2955,12 @@ function bindCommonActions(root = document) {
   });
 
   $$('[data-task-toggle]', root).forEach(input => {
+    input.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      input.checked = !input.checked;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     input.onchange = () => {
       const task = findTask(input.dataset.date, input.dataset.taskToggle);
       if (!task) return;
@@ -3003,6 +3028,7 @@ function bindCommonActions(root = document) {
         text: line,
         done: oldByText.get(line)?.done || false
       }));
+      normalizeTaskShape(task);
       markChanged();
     };
   });
@@ -3015,6 +3041,7 @@ function bindCommonActions(root = document) {
       const sub = task?.subtasks?.find(item => item.id === subId);
       if (!sub) return;
       sub.done = input.checked;
+      normalizeTaskShape(task);
       markChanged();
     };
   });

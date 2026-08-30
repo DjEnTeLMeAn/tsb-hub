@@ -1064,6 +1064,15 @@ function setSelectedDate(iso) {
 
 function applyActiveTabToDom() {
   document.body.dataset.activeTab = state.activeTab;
+  const sectionTitle = $('#currentSectionTitle');
+  if (sectionTitle) {
+    sectionTitle.textContent = {
+      tasks: 'Tasks',
+      food: 'Food',
+      finance: 'Finance',
+      settings: 'Настройки'
+    }[state.activeTab] || 'Tasks';
+  }
   $$('.tab-button').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === state.activeTab));
   $$('.mobile-tab-menu [data-tab-target]').forEach(btn => btn.classList.toggle('active', btn.dataset.tabTarget === state.activeTab));
   $$('.tab-page').forEach(page => page.classList.toggle('active', page.id === `tab-${state.activeTab}`));
@@ -1223,9 +1232,9 @@ function renderTasks() {
   const total = week.reduce((sum, item) => sum + item.total, 0);
   const done = week.reduce((sum, item) => sum + item.done, 0);
   const pct = total ? Math.round(done / total * 100) : 0;
-  root.innerHTML = `<section class="page-heading"><div><p class="eyebrow">ЛИЧНЫЙ ПЛАН</p><h1>Задачи</h1><p class="muted">Только ближайшее, без лишнего.</p></div></section>
+  root.innerHTML = `<section class="page-heading"><div><h1>Задачи</h1></div></section>
     <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow">Завтра</button></nav>
-    <section class="section-block"><div class="section-heading"><h2>${formatHumanDate(iso)}</h2><button class="primary-button compact-action" type="button" data-task-add aria-expanded="false">+ Добавить</button></div>
+    <section class="section-block"><div class="section-heading"><h2>${state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня'} · ${tasks.length} задач</h2><button class="primary-button compact-action" type="button" data-task-add aria-expanded="false">+ Добавить</button></div>
       <div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div>
       <div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
     </section>
@@ -1373,9 +1382,9 @@ function getFoodNutrition(iso = state.selectedDate) {
 
 function renderFoodMacros(nutrition) {
   return `<div class="grid-3" aria-label="Макронутриенты">
-    <div><span class="muted">Б</span><strong>${Math.round(nutrition.protein)} г</strong></div>
-    <div><span class="muted">Ж</span><strong>${Math.round(nutrition.fat)} г</strong></div>
-    <div><span class="muted">У</span><strong>${Math.round(nutrition.carbs)} г</strong></div>
+    <div><span class="muted">Белки</span><strong>${Math.round(nutrition.protein)} г</strong></div>
+    <div><span class="muted">Жиры</span><strong>${Math.round(nutrition.fat)} г</strong></div>
+    <div><span class="muted">Углеводы</span><strong>${Math.round(nutrition.carbs)} г</strong></div>
   </div>`;
 }
 
@@ -1409,12 +1418,12 @@ function renderFood() {
   const nutrition = getFoodNutrition();
   const weightISO = getWeeklyWeightISO(state.selectedDate);
   const weightHealth = getHealth(weightISO);
-  root.innerHTML = `<section class="card"><div class="card-title-row"><div><h1>Питание</h1><p class="muted">Главное за день — энергия и быстрый ввод.</p></div></div><div class="small-stat">${Math.round(nutrition.calories)} <span class="muted">ккал</span></div><p class="muted">${nutrition.calories ? 'за день' : 'калории появятся после анализа или ввода блюда'}</p>${renderFoodMacros(nutrition)}</section>
+  root.innerHTML = `<section class="card"><div class="card-title-row"><div><h1>Питание</h1><p class="muted">Главное за день — энергия и быстрый ввод.</p></div></div><div class="small-stat">${Math.round(nutrition.calories)}${nutrition.calories ? ' <span class="muted">ккал</span>' : ' / 2300 <span class="muted">ккал</span>'}</div>${renderFoodMacros(nutrition)}</section>
     ${renderFoodAiCard()}
     <section class="card"><div class="card-title-row"><div><h2>Блюда</h2><p class="muted">${health.meals.length} записей</p></div></div><div class="meal-list">${renderFoodMealPreview()}</div></section>
     ${renderCollapsedBlock('Добавить вручную', renderMealAddForm('food'), '', { key: `food-manual-${state.selectedDate}` })}
     ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
-    ${getLocalInsights(state.selectedDate).slice(0, 1).map(insight => `<section class="card"><p class="muted">${escapeHTML(insight.title)}</p><p>${escapeHTML(insight.text)}</p></section>`).join('')}`;
+    `;
   bindCommonActions(root);
   $('[data-food-ai-scan]', root)?.addEventListener('click', () => { getFoodAiState().status = 'selecting'; renderFood(); });
   $('[data-food-ai-error]', root)?.addEventListener('click', () => { const ai = getFoodAiState(); ai.status = 'error'; ai.error = 'Демо-ошибка: анализ недоступен.'; renderFood(); });

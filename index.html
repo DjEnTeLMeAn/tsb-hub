@@ -22,13 +22,16 @@
 <body>
   <div class="app-shell">
     <header class="app-header">
+      <h1 id="currentSectionTitle">Tasks</h1>
       <button class="icon-button profile-settings-button" type="button" data-tab-target="settings" aria-label="Открыть настройки" title="Настройки">⚙</button>
+    </header>
+    <div class="date-navigation-row">
       <div class="date-switcher" aria-label="Выбранная дата">
         <button class="icon-button" id="prevDayBtn" title="Предыдущий день">‹</button>
         <button class="date-pill" id="openCalendarBtn" title="Открыть календарь"><span id="selectedDateLabel">—</span><span class="date-pill-hint">календарь</span></button>
         <button class="icon-button" id="nextDayBtn" title="Следующий день">›</button>
       </div>
-    </header>
+    </div>
     <main class="layout">
       <aside class="side-panel" aria-label="Боковая панель">
         <section class="card mini-calendar-card"><div class="card-title-row"><h2>Календарь</h2><button class="ghost-button small" id="todayBtn">Сегодня</button></div><div id="desktopCalendar"></div></section>

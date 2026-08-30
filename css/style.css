@@ -605,6 +605,36 @@ html, body { max-width: 100%; overflow-x: hidden; }
   }
 }
 
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 8px 16px calc(80px + env(safe-area-inset-bottom));
+  }
+
+  .app-header {
+    height: 52px;
+    min-height: 52px;
+  }
+
+  .date-switcher {
+    height: 48px;
+  }
+
+  .tabs {
+    height: 64px;
+    min-height: 64px;
+  }
+
+  .tab-button {
+    height: 48px;
+    min-height: 48px;
+  }
+
+  .tab-button.active {
+    background: rgba(91,124,250,.14);
+    background-image: none;
+  }
+}
+
 .grid-2 .form-grid.food,
 .grid-2 .form-grid.finance,
 .day-column .form-grid.food,

@@ -1574,6 +1574,23 @@ img, svg, video, canvas { max-width: 100%; }
   .week-grid { overflow-x: hidden; }
 }
 
+/* Mobile layout contract: keep card rows and controls inside the viewport. */
+@media (max-width: 900px) {
+  .task-top, .item-top {
+    min-width: 0;
+  }
+
+  .task-main, .task-main > div, .item-top > div:first-child {
+    min-width: 0;
+  }
+
+  .task-text, .meal-card h3, .meal-card p, .important-content h3,
+  .important-content p, .finance-card h3, .finance-card p {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
 /* Final authoritative mobile layout overrides. */
 @media (max-width: 900px) {
   .app-shell {

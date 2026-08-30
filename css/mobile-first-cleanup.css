@@ -92,3 +92,42 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
   body #tab-food .grid-3 .muted{font-size:.78rem!important;line-height:1.2!important;}
   body #tab-food .grid-3 strong{font-size:1rem!important;line-height:1.2!important;}
 }
+
+/* Final mobile pass: one card rhythm, no flex overflow, and 44px touch zones. */
+@media(max-width:900px){
+  body .task-card,body .meal-card,body .important-card,body .finance-card{
+    padding:14px!important;
+    border-radius:16px!important;
+    min-width:0!important;
+  }
+
+  body .task-top,body .item-top{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    min-width:0!important;
+    gap:10px!important;
+  }
+  body .task-main,body .item-top>div:first-child,body .task-main>div{
+    width:auto!important;
+    min-width:0!important;
+  }
+  body .task-top>.actions,body .item-top>.actions{
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  body .task-main>input[type="checkbox"],body .subtask>input[type="checkbox"]{
+    width:44px!important;
+    height:44px!important;
+    min-width:44px!important;
+    min-height:44px!important;
+    flex:0 0 44px!important;
+    margin:0!important;
+  }
+  body .subtask{align-items:center!important;min-height:44px!important;}
+  body .actions button,body .mf-icon-action{min-height:44px!important;}
+}
+
+@media(max-width:430px){
+  body .task-card,body .meal-card,body .important-card,body .finance-card{padding:12px!important;}
+}

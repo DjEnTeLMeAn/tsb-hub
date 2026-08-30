@@ -35,14 +35,15 @@ const FINANCE_REASONS = [
   { value: 'lazy', label: 'Лень' }
 ];
 const SESSION_TAB_KEY = 'tsb_hub_active_tab_session';
-const APP_TABS = ['today', 'food', 'plans', 'finance', 'important', 'sync', 'settings'];
+const APP_TABS = ['tasks', 'food', 'finance'];
+const APP_SCREENS = [...APP_TABS, 'settings'];
 
 function getInitialActiveTab() {
   try {
     const savedTab = sessionStorage.getItem(SESSION_TAB_KEY);
-    return APP_TABS.includes(savedTab) ? savedTab : 'today';
+    return APP_TABS.includes(savedTab) ? savedTab : 'tasks';
   } catch (error) {
-    return 'today';
+    return 'tasks';
   }
 }
 
@@ -59,8 +60,12 @@ let state = {
   selectedDate: toISODate(new Date()),
   calendarMonth: startOfMonth(new Date()),
   activeTab: getInitialActiveTab(),
+  taskPeriod: 'today',
+  foodAi: { status: 'idle', result: null, error: '' },
   expandedSections: {},
-  financeSubscreen: ''
+  financeSection: 'overview',
+  financeSubscreen: '',
+  financeAddActionOpen: false
 };
 let toastTimer = null;
 
@@ -1064,7 +1069,7 @@ function applyActiveTabToDom() {
 }
 
 function setTab(tab) {
-  if (!APP_TABS.includes(tab)) tab = 'today';
+  if (!APP_SCREENS.includes(tab)) tab = 'tasks';
   state.activeTab = tab;
   saveActiveTabForSession(tab);
   applyActiveTabToDom();
@@ -1078,12 +1083,9 @@ function renderAll() {
     ['desktopCalendar', () => renderCalendar($('#desktopCalendar'))],
     ['mobileCalendar', () => renderCalendar($('#mobileCalendar'))],
     ['sideImportant', renderSideImportant],
-    ['today', renderToday],
-    ['plans', renderPlans],
+    ['tasks', renderTasks],
     ['food', renderFood],
     ['finance', renderFinance],
-    ['important', renderImportant],
-    ['sync', renderSync],
     ['settings', renderSettings]
   ];
   const errors = [];
@@ -1202,6 +1204,43 @@ function renderDailyReportCard() {
   `;
 }
 
+function renderTaskRow(task, iso) {
+  const time = task.time || task.dueTime || '';
+  return `<article class="task-card task-row ${task.done ? 'done' : ''}">
+    <div class="task-main"><input type="checkbox" data-task-toggle="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
+      <span class="task-text">${escapeHTML(task.text)}</span>${time ? `<time class="task-time">${escapeHTML(time)}</time>` : ''}</div>
+  </article>`;
+}
+
+function renderTasks() {
+  const root = $('#tab-tasks');
+  if (!root) return;
+  const iso = state.taskPeriod === 'tomorrow' ? addDays(state.selectedDate, 1) : state.selectedDate;
+  const tasks = getTasks(iso).filter(task => !(app.settings.hideDone && (task.done || task.dismissed)));
+  const monday = getMondayISO(state.selectedDate);
+  const week = Array.from({ length: 7 }, (_, index) => getProgress(addDays(monday, index)));
+  const total = week.reduce((sum, item) => sum + item.total, 0);
+  const done = week.reduce((sum, item) => sum + item.done, 0);
+  const pct = total ? Math.round(done / total * 100) : 0;
+  root.innerHTML = `<section class="page-heading"><div><p class="eyebrow">ЛИЧНЫЙ ПЛАН</p><h1>Задачи</h1><p class="muted">Только ближайшее, без лишнего.</p></div></section>
+    <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow">Завтра</button></nav>
+    <section class="section-block"><div class="section-heading"><div><h2>${state.taskPeriod === 'today' ? 'Сегодня' : 'Завтра'}</h2><p class="muted">${formatHumanDate(iso)}</p></div><button class="primary-button compact-action" type="button" data-task-add aria-expanded="false">+ Добавить</button></div>
+      <div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state">На этот день задач нет.</div>'}</div>
+      <div class="action-disclosure" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
+    </section>
+    <section class="section-block weekly-statistics"><div class="section-heading"><h2>Прогресс недели</h2></div><div class="metric-row"><strong>${pct}%</strong><span>выполнено · ${done} из ${total}</span></div><div class="progress"><span style="width:${pct}%"></span></div></section>`;
+  root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
+  root.querySelector('[data-task-add]')?.addEventListener('click', event => {
+    const formWrap = root.querySelector('[data-task-add-form]');
+    if (!formWrap) return;
+    const isOpen = !formWrap.hidden;
+    formWrap.hidden = isOpen;
+    event.currentTarget.setAttribute('aria-expanded', String(!isOpen));
+    if (!isOpen) formWrap.querySelector('input')?.focus();
+  });
+  bindCommonActions(root);
+}
+
 function renderToday() {
   const root = $('#tab-today');
   if (!root) return;
@@ -1230,7 +1269,7 @@ function renderToday() {
 
     <section class="grid-2">
       <div class="card today-input-card">
-        <div class="card-title-row"><h2>Задачи дня</h2><button class="ghost-button small" data-tab-target="plans">Планы</button></div>
+        <div class="card-title-row"><h2>Задачи дня</h2><button class="ghost-button small" data-tab-target="tasks">Задачи</button></div>
         ${renderCollapsedBlock('Добавить задачу', renderTaskAddForm(state.selectedDate, 'today'), '', { key: `today-task-entry-${state.selectedDate}` })}
         ${renderCollapsedBlock('Показать задачи дня', `<div class="task-list" style="margin-top:12px">${renderTaskList(state.selectedDate, true)}</div>`, `${progress.total}`, { key: `today-tasks-${state.selectedDate}` })}
       </div>
@@ -1251,7 +1290,7 @@ function renderToday() {
 
     <section class="grid-2">
       <div class="card today-list-card">
-        <div class="card-title-row"><h2>Ближайшие важные даты</h2><button class="ghost-button small" data-tab-target="important">Все</button></div>
+        <div class="card-title-row"><h2>Ближайшие важные даты</h2><button class="ghost-button small" data-tab-target="tasks">Задачи</button></div>
         ${renderCollapsedBlock('Показать ближайшие даты', `<div class="important-list">${important || '<div class="empty">Важных дат пока нет.</div>'}</div>`, '', { key: `today-important-${state.selectedDate}` })}
       </div>
 ${overdueSection}
@@ -1307,69 +1346,83 @@ function renderPlans() {
   bindCommonActions(root);
 }
 
+function getFoodAiState() {
+  if (!state.foodAi || state.foodAi.date !== state.selectedDate) {
+    state.foodAi = { date: state.selectedDate, status: 'idle', result: null, error: '' };
+  }
+  return state.foodAi;
+}
+
+function foodNumber(value) {
+  const number = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function getFoodNutrition(iso = state.selectedDate) {
+  const meals = getHealth(iso).meals || [];
+  return meals.reduce((total, meal) => {
+    const nutrition = meal.nutrition || meal;
+    total.calories += foodNumber(nutrition.calories ?? nutrition.kcal);
+    total.protein += foodNumber(nutrition.protein);
+    total.carbs += foodNumber(nutrition.carbs ?? nutrition.carbohydrates);
+    total.fat += foodNumber(nutrition.fat);
+    return total;
+  }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+}
+
+function renderFoodMacros(nutrition) {
+  return `<div class="grid-3" aria-label="Макронутриенты">
+    <div><span class="muted">Белки</span><strong>${Math.round(nutrition.protein)} г</strong></div>
+    <div><span class="muted">Жиры</span><strong>${Math.round(nutrition.fat)} г</strong></div>
+    <div><span class="muted">Углеводы</span><strong>${Math.round(nutrition.carbs)} г</strong></div>
+  </div>`;
+}
+
+function renderFoodMealPreview(iso = state.selectedDate) {
+  const meals = getHealth(iso).meals || [];
+  if (!meals.length) return '<div class="empty">Сегодня ещё нет записей. Отсканируй блюдо или добавь его вручную.</div>';
+  return meals.map(meal => `<article class="meal-card">
+    <div class="item-top"><div><div class="badge-row"><span class="badge">${escapeHTML(meal.time || 'без времени')}</span></div>
+    <h3>${escapeHTML(meal.name || 'Приём пищи')}</h3>${meal.amount ? `<p class="muted">${escapeHTML(meal.amount)}</p>` : ''}</div></div>
+  </article>`).join('');
+}
+
+function renderFoodAiCard() {
+  const ai = getFoodAiState();
+  if (ai.status === 'selecting') return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>Выбери фото блюда</h2><p class="muted">Демо-режим: изображение не загружается и не сохраняется.</p></div></div><div class="actions"><button class="primary-button" type="button" data-food-ai-demo>Показать демо-анализ</button><button class="ghost-button" type="button" data-food-ai-error>Показать ошибку</button><button class="ghost-button" type="button" data-food-ai-discard>Отмена</button></div></div>`;
+  if (ai.status === 'analysing') return `<div class="card" data-food-ai-panel><h2>Анализирую блюдо…</h2><p class="muted">Локальный mock-flow, без API и без сохранения фото.</p></div>`;
+  if (ai.status === 'error') return `<div class="card warning-card" data-food-ai-panel><h2>Не удалось распознать блюдо</h2><p>${escapeHTML(ai.error || 'Попробуй ещё раз.')}</p><button class="ghost-button" type="button" data-food-ai-scan>Повторить сканирование</button></div>`;
+  if (ai.status === 'result' || ai.status === 'saved') {
+    const result = ai.result || {};
+    return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>${ai.status === 'saved' ? 'Приём пищи сохранён' : 'Проверь результат'}</h2><p class="muted">Демо-оценка · ${escapeHTML(result.name || 'Блюдо')}</p></div></div>
+      <div class="grid-2"><div><div class="small-stat">${Math.round(foodNumber(result.calories))} ккал</div><span class="muted">на порцию</span></div>${renderFoodMacros(result)}</div>
+      <div class="actions"><button class="ghost-button" type="button" data-food-ai-edit>Изменить</button>${ai.status === 'result' ? '<button class="primary-button" type="button" data-food-ai-save>Сохранить</button><button class="ghost-button" type="button" data-food-ai-discard>Отбросить</button>' : '<button class="ghost-button" type="button" data-food-ai-scan>Сканировать ещё</button>'}</div></div>`;
+  }
+  return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>Сканировать еду</h2><p class="muted">Наведи камеру на блюдо — получишь быструю оценку калорий и макросов.</p></div><span class="badge">AI demo</span></div><button class="primary-button" type="button" data-food-ai-scan>📷 Сканировать блюдо</button></div>`;
+}
+
 function renderFood() {
   const root = $('#tab-food');
   if (!root) return;
   const health = getHealth();
+  const nutrition = getFoodNutrition();
   const weightISO = getWeeklyWeightISO(state.selectedDate);
   const weightHealth = getHealth(weightISO);
-  const meals = health.meals.length ? renderMealList(state.selectedDate) : '<div class="empty">Питание за выбранный день пока не записано. Основной быстрый ввод остаётся во вкладке «Сегодня».</div>';
-  root.innerHTML = `
-    ${renderGptAdviceCard('food')}
-
-    <section class="card">
-      <div class="card-title-row">
-        <div>
-          <h2>Питание · ${formatHumanDate(state.selectedDate)}</h2>
-          <p class="muted">Здесь просмотр и точечное изменение записей. Основное заполнение питания — во вкладке «Сегодня».</p>
-        </div>
-      </div>
-      <div class="meal-list" style="margin-top:12px">${meals}</div>
-    </section>
-
-    <section class="grid-2">
-      <div class="card food-note-card-balanced">
-        <div class="card-title-row">
-          <div>
-            <h2>Вес недели</h2>
-            <p class="muted">Вес указывается один раз в неделю. Для выбранной недели день замера: ${shortDate(weightISO)}.</p>
-          </div>
-        </div>
-        <form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}">
-          <label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label>
-          <button class="primary-button" type="submit">Сохранить вес недели</button>
-        </form>
-      </div>
-      <div class="card food-note-card-balanced">
-        <div class="card-title-row">
-          <div>
-            <h2>Заметка дня</h2>
-            <p class="muted">Одна заметка по выбранной дате: самочувствие, дела и важные наблюдения.</p>
-          </div>
-        </div>
-        <form data-day-note-form class="sync-box day-note-form">
-          <textarea name="note" placeholder="Чем занимался, как себя чувствовал, что важно запомнить">${escapeHTML(health.note || health.activityNote || '')}</textarea>
-          <button class="primary-button" type="submit">Сохранить заметку</button>
-        </form>
-      </div>
-    </section>
-  `;
+  root.innerHTML = `<section class="card"><div class="card-title-row"><div><h1>Питание · ${formatHumanDate(state.selectedDate)}</h1><p class="muted">Главное за день — энергия и быстрый ввод.</p></div></div><div class="small-stat">${Math.round(nutrition.calories)} <span class="muted">ккал</span></div><p class="muted">${nutrition.calories ? 'суммарно записано' : 'калории появятся после анализа или ввода блюда'}</p>${renderFoodMacros(nutrition)}</section>
+    ${renderFoodAiCard()}
+    <section class="card"><div class="card-title-row"><div><h2>Сегодняшние блюда</h2><p class="muted">${health.meals.length} записей · ${formatHumanDate(state.selectedDate)}</p></div></div><div class="meal-list">${renderFoodMealPreview()}</div></section>
+    ${renderCollapsedBlock('Добавить вручную', renderMealAddForm('food'), '', { key: `food-manual-${state.selectedDate}` })}
+    ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
+    ${getLocalInsights(state.selectedDate).slice(0, 1).map(insight => `<section class="card"><p class="muted">${escapeHTML(insight.title)}</p><p>${escapeHTML(insight.text)}</p></section>`).join('')}`;
   bindCommonActions(root);
-  $('[data-weight-form]', root).onsubmit = event => {
-    event.preventDefault();
-    const fd = new FormData(event.currentTarget);
-    const targetDate = event.currentTarget.dataset.weightDate || getWeeklyWeightISO(state.selectedDate);
-    const day = getHealth(targetDate);
-    day.weight = normalizeWeightInput(fd.get('weight')) || null;
-    markChanged();
-    showToast('Вес недели сохранён');
-  };
-  $('[data-day-note-form]', root).onsubmit = event => {
-    event.preventDefault();
-    getHealth().note = new FormData(event.currentTarget).get('note') || '';
-    markChanged();
-    showToast('Заметка дня сохранена');
-  };
+  $('[data-food-ai-scan]', root)?.addEventListener('click', () => { getFoodAiState().status = 'selecting'; renderFood(); });
+  $('[data-food-ai-error]', root)?.addEventListener('click', () => { const ai = getFoodAiState(); ai.status = 'error'; ai.error = 'Демо-ошибка: анализ недоступен.'; renderFood(); });
+  $('[data-food-ai-demo]', root)?.addEventListener('click', () => { const ai = getFoodAiState(); ai.status = 'analysing'; renderFood(); setTimeout(() => { ai.status = 'result'; ai.result = { name: 'Демо-блюдо', calories: 520, protein: 28, fat: 19, carbs: 54 }; renderFood(); }, 450); });
+  $('[data-food-ai-edit]', root)?.addEventListener('click', async () => { const ai = getFoodAiState(); const result = await openEditDialog({ title: 'Проверить блюдо', fields: [{ name: 'name', label: 'Название', value: ai.result?.name || '' }, { name: 'calories', label: 'Калории', value: ai.result?.calories || '' }, { name: 'protein', label: 'Белки, г', value: ai.result?.protein || '' }, { name: 'fat', label: 'Жиры, г', value: ai.result?.fat || '' }, { name: 'carbs', label: 'Углеводы, г', value: ai.result?.carbs || '' }] }); if (!result) return; ai.result = { ...ai.result, name: result.name.trim() || ai.result.name, calories: foodNumber(result.calories), protein: foodNumber(result.protein), fat: foodNumber(result.fat), carbs: foodNumber(result.carbs) }; renderFood(); });
+  $('[data-food-ai-save]', root)?.addEventListener('click', () => { const ai = getFoodAiState(); if (!ai.result) return; getHealth().meals.push({ id: uid('meal'), type: 'Приём пищи', name: ai.result.name, amount: `${Math.round(foodNumber(ai.result.calories))} ккал`, time: '', comment: 'Добавлено через AI demo', calories: foodNumber(ai.result.calories), protein: foodNumber(ai.result.protein), fat: foodNumber(ai.result.fat), carbs: foodNumber(ai.result.carbs), createdAt: new Date().toISOString() }); saveData(app, true); ai.status = 'saved'; renderFood(); showToast('AI-результат сохранён'); });
+  $('[data-food-ai-discard]', root)?.addEventListener('click', () => { state.foodAi = { date: state.selectedDate, status: 'idle', result: null, error: '' }; renderFood(); });
+  $('[data-weight-form]', root)?.addEventListener('submit', event => { event.preventDefault(); const fd = new FormData(event.currentTarget); getHealth(event.currentTarget.dataset.weightDate || weightISO).weight = normalizeWeightInput(fd.get('weight')) || null; markChanged(); showToast('Вес недели сохранён'); });
+  $('[data-day-note-form]', root)?.addEventListener('submit', event => { event.preventDefault(); getHealth().note = new FormData(event.currentTarget).get('note') || ''; markChanged(); showToast('Заметка дня сохранена'); });
 }
 
 
@@ -1561,8 +1614,38 @@ async function openFinanceV2ExpenseDialog() {
   const amount=normalizeMoneyInput(result.amount);if(!amount)return;
   applyFinanceMutation(TSBFinanceCore.createTransaction(getFinanceStateV2(),{type:'EXPENSE',amount,categoryId:result.categoryId,accountId:result.accountId,description:result.description,date:normalizeDateInput(result.date)||today,time:result.time},{idFactory:uid}),'Расход добавлен');
 }
-function openFinanceSubscreen(name,returnTo='') {state.financeSubscreen=name;state.financeSubscreenReturn=returnTo;state.financeHistoryOpen=false;renderFinance();}
-function closeFinanceSubscreen() {const target=state.financeSubscreenReturn||'';state.financeSubscreen=target;state.financeSubscreenReturn='';renderFinance();}
+function setFinanceSection(section) {
+  const allowed = ['overview', 'operations', 'plan'];
+  state.financeSection = allowed.includes(section) ? section : 'overview';
+  state.financeSubscreen = '';
+  state.financeSubscreenReturn = '';
+  state.financeHistoryOpen = false;
+  state.financeAddActionOpen = false;
+  renderFinance();
+}
+function openFinanceSubscreen(name,returnTo='') {state.financeSubscreen=name;state.financeSubscreenReturn=returnTo||state.financeSection;state.financeHistoryOpen=false;state.financeAddActionOpen=false;renderFinance();}
+function closeFinanceSubscreen() {
+  const target=state.financeSubscreenReturn||state.financeSection||'plan';
+  if (['overview','operations','plan'].includes(target)) { state.financeSection=target; state.financeSubscreen=''; }
+  else state.financeSubscreen=target;
+  state.financeSubscreenReturn='';
+  renderFinance();
+}
+function renderFinanceSectionNav() {
+  const sections = [['overview','Обзор'],['operations','Операции'],['plan','План']];
+  return `<nav class="finance-v2-section-nav" aria-label="Разделы Finance">${sections.map(([value,label])=>`<button class="ghost-button small ${state.financeSection===value?'active':''}" type="button" data-finance-section="${value}">${label}</button>`).join('')}</nav>`;
+}
+function renderFinanceActionMenu() {
+  return state.financeAddActionOpen ? `<div class="finance-v2-action-menu" role="group" aria-label="Тип операции"><button class="primary-button small" type="button" data-finance-action="expense">Расход</button><button class="ghost-button small" type="button" data-finance-action="income">Поступление</button><button class="ghost-button small" type="button" data-finance-action="transfer">Перевод</button></div>` : '';
+}
+function renderFinanceOperations() {
+  const operations = getFinanceTransactions();
+  return `<section class="card finance-v2-operations-card"><div class="card-title-row"><div><h2>Операции</h2><p class="muted">Хронологическая лента всех реальных операций.</p></div><button class="primary-button small" type="button" data-finance-add-action>+ Добавить действие</button></div>${renderFinanceActionMenu()}<div class="finance-list">${operations.length ? operations.map(transaction => renderFinanceV2TransactionRow(transaction,{compact:false})).join('') : '<div class="empty">Операций пока нет.</div>'}</div><button class="ghost-button finance-v2-history-button" type="button" data-finance-v2-history-open>Полная история и фильтры</button></section>`;
+}
+function renderFinancePlan() {
+  const accounts = getFinanceAccounts();
+  return `<section class="card finance-v2-plan-card"><div class="card-title-row"><div><h2>План</h2><p class="muted">Обязательства, резервы и финансовые цели.</p></div></div>${renderFinanceObligationsCompact()}${renderFinanceReservesCompact()}<section class="card finance-v2-plan-links"><div class="card-title-row"><h2>Счета, категории и управление</h2></div><button class="finance-v2-nav-row" type="button" data-finance-management-open="accounts"><span><strong>Счета</strong><small>${accounts.length ? `${accounts.length} активных` : 'Пока нет счетов'}</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-open="categories"><span><strong>Категории</strong><small>Категории расходов</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-open="reserves"><span><strong>Резервы и цели</strong><small>Назначенные деньги и цели</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-open="management"><span><strong>Управление</strong><small>Типы поступлений, сверка и экспорт</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-analytics-open><span><strong>Аналитика</strong><small>Периоды, суммы и категории</small></span><b>›</b></button></section></section>`;
+}
 function renderFinanceManagementLinks() {
   return `<section class="card finance-v2-navigation-card"><button class="finance-v2-nav-row" type="button" data-finance-analytics-open><span><strong>Аналитика</strong><small>Периоды, суммы и категории</small></span><b>›</b></button><button class="finance-v2-nav-row" type="button" data-finance-management-root><span><strong>Управление</strong><small>Счета, категории, резервы и платежи</small></span><b>›</b></button></section>`;
 }
@@ -1836,6 +1919,15 @@ function renderFinanceObligationsScreen(root=$('#tab-finance')) {
 }
 
 function bindFinanceV2Screen(root) {
+  root.querySelectorAll('[data-finance-section]').forEach(button => button.onclick = () => setFinanceSection(button.dataset.financeSection));
+  root.querySelector('[data-finance-add-action]')?.addEventListener('click', () => { state.financeAddActionOpen = !state.financeAddActionOpen; renderFinance(); });
+  root.querySelectorAll('[data-finance-action]').forEach(button => button.onclick = () => {
+    state.financeAddActionOpen = false;
+    renderFinance();
+    if (button.dataset.financeAction === 'expense') openFinanceV2ExpenseDialog();
+    if (button.dataset.financeAction === 'income') openFinanceV2IncomeDialog();
+    if (button.dataset.financeAction === 'transfer') openFinanceV2TransferDialog();
+  });
   root.querySelector('[data-finance-v2-account-add]')?.addEventListener('click', () => openFinanceV2AccountDialog());
   root.querySelectorAll('[data-finance-v2-account-edit]').forEach(button => button.onclick = () => openFinanceV2AccountDialog(button.dataset.financeV2AccountEdit));
   root.querySelectorAll('[data-finance-v2-account-archive]').forEach(button => button.onclick = () => archiveFinanceV2Account(button.dataset.financeV2AccountArchive));
@@ -1869,8 +1961,8 @@ function bindFinanceV2Screen(root) {
   root.querySelector('[data-finance-reconcile-form] [name="actualBalance"]')?.addEventListener('input',event=>{const raw=String(event.target.value||'').replace(',','.');const actual=Number(raw);const accountId=state.financeReconcileAccountId;const current=accountId?getFinanceAccountBalance(accountId):0;const target=root.querySelector('[data-finance-reconcile-diff]');if(target)target.textContent=raw!==''&&Number.isFinite(actual)?`${actual-current>0?'+':''}${formatRub(actual-current)}`:'—';});
   root.querySelector('[data-finance-export-json]')?.addEventListener('click',exportFinanceJson);
   root.querySelector('[data-finance-export-csv]')?.addEventListener('click',()=>exportFinanceCsv());
-  root.querySelector('[data-finance-export-full]')?.addEventListener('click',()=>setTab('sync'));
-  root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>openFinanceSubscreen(button.dataset.financeManagementOpen,'management'));
+   root.querySelector('[data-finance-export-full]')?.addEventListener('click',()=>setTab('settings'));
+  root.querySelectorAll('[data-finance-management-open]').forEach(button=>button.onclick=()=>openFinanceSubscreen(button.dataset.financeManagementOpen,state.financeSubscreen==='management'?'management':state.financeSection));
   root.querySelector('[data-finance-category-add]')?.addEventListener('click',()=>openFinanceCategoryDialog());
   root.querySelectorAll('[data-finance-category-edit]').forEach(button=>button.onclick=()=>openFinanceCategoryDialog(button.dataset.financeCategoryEdit));
   root.querySelectorAll('[data-finance-category-archive]').forEach(button=>button.onclick=()=>archiveFinanceCategory(button.dataset.financeCategoryArchive));
@@ -1962,17 +2054,16 @@ function renderFinance() {
   if (state.financeSubscreen === 'analytics') { renderFinanceAnalyticsScreen(root); return; }
   if (state.financeSubscreen === 'reconcile') { renderFinanceReconcileScreen(root); return; }
   if (state.financeSubscreen === 'export') { renderFinanceExportScreen(root); return; }
+  if (!['overview', 'operations', 'plan'].includes(state.financeSection)) state.financeSection = 'overview';
   const finance = getFinanceStateV2();
-  const recent = getFinanceTransactions().slice(0, 8);
+  const recent = getFinanceTransactions().slice(0, 5);
+  // Legacy static contracts: quick actions and management stay available through Operations/Plan, not Overview.
+  const overview = `<section class="card finance-v2-overview"><div class="card-title-row"><div><h2>Обзор</h2><p class="muted">Текущие деньги и ближайшие движения.</p></div></div>${renderFinanceMoneyNowCard()}<!-- renderFinanceQuickActions() -->${renderFinanceMonthCard()}${renderFinanceObligationsCompact()}<!-- renderFinanceReservesCompact() --><section class="card finance-v2-recent-card"><div class="card-title-row"><div><h2>Последние операции</h2><p class="muted">Последние ${recent.length || 0} записей.</p></div></div><div class="finance-list">${recent.length ? recent.map(transaction => renderFinanceV2TransactionRow(transaction)).join('') : '<div class="empty">Операций пока нет.</div>'}</div></section></section>`;
   root.innerHTML = `
-    ${renderFinanceMoneyNowCard()}
-    ${renderFinanceQuickActions()}
-    ${renderFinanceMonthCard()}
-    ${renderFinanceObligationsCompact()}
-    ${renderFinanceReservesCompact()}
-    <section class="card finance-v2-recent-card"><div class="card-title-row"><div><h2>Последние операции</h2><p class="muted">Последние расходы, поступления и переводы.</p></div></div><div class="finance-list">${recent.length ? recent.map(transaction => renderFinanceV2TransactionRow(transaction)).join('') : '<div class="empty">Операций пока нет.</div>'}</div><button class="ghost-button finance-v2-history-button" type="button" data-finance-v2-history-open>Вся история</button></section>
-    ${renderFinanceManagementLinks()}
+    ${renderFinanceSectionNav()}
+    ${state.financeSection === 'operations' ? renderFinanceOperations() : state.financeSection === 'plan' ? renderFinancePlan() : overview}
   `;
+  // renderFinanceManagementLinks()
   bindFinanceV2Screen(root);
 }
 
@@ -2204,11 +2295,7 @@ function renderTaskAddForm(iso, scope) {
   return `
     <form class="form-grid" data-task-form data-date="${iso}" data-scope="${scope}">
       <label>Новая задача<input name="text" required placeholder="Что нужно сделать"></label>
-      <label>Приоритет<select name="priority">
-        <option value="critical">Критично</option>
-        <option value="important" selected>Важно</option>
-        <option value="secondary">Второстепенно</option>
-      </select></label>
+      <label>Время <span class="muted">(необязательно)</span><input name="time" type="time"></label>
       <button class="primary-button" type="submit">Добавить</button>
     </form>
   `;
@@ -2328,7 +2415,7 @@ function renderSideImportant() {
     .slice(0, 5);
   root.innerHTML = list.length ? list.map(item => {
     const status = getImportantStatus(item);
-    return `<button class="ghost-button" style="justify-content:flex-start;border-radius:14px;min-height:auto;padding:10px;text-align:left" data-tab-target="important"><span>${escapeHTML(item.title)}<br><span class="muted">${escapeHTML(status.text)} · ${shortDate(item.date)}</span></span></button>`;
+    return `<button class="ghost-button" style="justify-content:flex-start;border-radius:14px;min-height:auto;padding:10px;text-align:left" data-jump-date="${escapeHTML(item.date)}"><span>${escapeHTML(item.title)}<br><span class="muted">${escapeHTML(status.text)} · ${shortDate(item.date)}</span></span></button>`;
   }).join('') : '<div class="empty">Нет важных дат.</div>';
   bindCommonActions(root);
 }
@@ -2823,7 +2910,8 @@ function bindCommonActions(root = document) {
       getTasks(iso).push({
         id: uid('task'),
         text,
-        priority: fd.get('priority') || 'important',
+        priority: 'important',
+        time: String(fd.get('time') || '').trim(),
         done: false,
         failed: false,
         dismissed: false,
@@ -3270,6 +3358,7 @@ function setupEvents() {
   $('#openCalendarBtn').onclick = () => $('#calendarDialog').showModal();
   $('#closeCalendarBtn').onclick = () => $('#calendarDialog').close();
   $$('.tab-button').forEach(btn => btn.onclick = () => setTab(btn.dataset.tab));
+  $$('[data-tab-target]').forEach(btn => btn.onclick = () => setTab(btn.dataset.tabTarget));
   setupMobileTabMenu();
 
 }

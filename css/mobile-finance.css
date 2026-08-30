@@ -9,7 +9,7 @@
 .finance-v2-primary-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .finance-v2-accounts{display:grid;gap:10px;margin-top:10px}
 .finance-v2-account{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px;border:1px solid var(--border);border-radius:16px;background:rgba(255,255,255,.025)}
-.finance-v2-account.default{border-color:rgba(139,92,246,.36);background:rgba(139,92,246,.055)}
+.finance-v2-account.default{border-color:rgba(100,116,139,.36);background:rgba(100,116,139,.055)}
 .finance-v2-account>div:first-child{min-width:0}
 .finance-v2-account h3{margin:5px 0 2px;overflow-wrap:anywhere}
 .finance-v2-account-balance{font-size:1.1rem;font-weight:850}
@@ -18,7 +18,7 @@
 .finance-v2-operation:active{transform:scale(.995)}
 .finance-v2-operation.income h3{color:#86efac}
 .finance-v2-operation.expense h3{color:#fca5a5}
-.finance-v2-operation.transfer h3{color:#c4b5fd}
+.finance-v2-operation.transfer h3{color:#cbd5e1}
 .finance-v2-chevron{font-size:1.6rem;opacity:.45;align-self:center}
 .finance-v2-history-button{width:100%;margin-top:12px}
 @media(max-width:560px){.finance-v2-primary-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-v2-account{align-items:start}.finance-v2-account .actions{display:flex!important;grid-template-columns:none!important;width:auto!important;min-width:0!important;flex-wrap:nowrap!important;justify-content:flex-end!important}.finance-v2-account .actions button{width:auto!important;min-width:64px!important}}
@@ -27,13 +27,13 @@
 /* Finance v2 Part 1 — unified history */
 .finance-v2-filter-row{display:flex;gap:7px;overflow-x:auto;padding:3px 0 6px;scrollbar-width:none}
 .finance-v2-filter-row::-webkit-scrollbar{display:none}
-.finance-v2-filter-row .active{border-color:rgba(139,92,246,.55);background:rgba(139,92,246,.14)}
+.finance-v2-filter-row .active{border-color:rgba(100,116,139,.55);background:rgba(100,116,139,.14)}
 .finance-v2-history-search{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(140px,1.2fr) auto;gap:8px;margin-top:10px}
 .finance-v2-history-search select,.finance-v2-history-search input{min-width:0}
 .finance-v2-custom-period{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
 .finance-v2-custom-period label{display:grid;gap:5px;font-size:.78rem;color:var(--muted);min-width:0}
 .finance-v2-custom-period input{min-width:0}
-.finance-v2-filter-summary{padding:14px;margin-top:12px;border:1px solid rgba(139,92,246,.24);border-radius:16px;background:rgba(139,92,246,.055)}
+.finance-v2-filter-summary{padding:14px;margin-top:12px;border:1px solid rgba(100,116,139,.24);border-radius:16px;background:rgba(100,116,139,.055)}
 .finance-v2-filter-total{font-size:1.35rem;font-weight:900;margin:4px 0}
 .finance-v2-history-groups{display:grid;gap:12px;margin-top:12px}
 .finance-v2-history-day>h3{font-size:.9rem;color:var(--muted);margin:0 0 7px 5px;text-transform:none;font-weight:750}
@@ -48,7 +48,7 @@
 .finance-v2-reserve-card h3{margin:0 0 4px}
 .finance-v2-reserve-amount{font-weight:850;font-size:1rem}
 .finance-v2-reserve-progress{height:7px;border-radius:999px;overflow:hidden;background:rgba(148,163,184,.15);margin-top:9px}
-.finance-v2-reserve-progress>span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgba(139,92,246,.75),rgba(167,139,250,.95))}
+.finance-v2-reserve-progress>span{display:block;height:100%;border-radius:inherit;background:rgba(100,116,139,.95)}
 .finance-v2-reserve-actions,.finance-v2-section-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .finance-v2-section-actions{margin-top:12px}
 .finance-v2-legacy-review{display:grid;gap:10px;border-color:rgba(245,158,11,.34)}
@@ -76,7 +76,7 @@
 .finance-v2-money-stat{display:grid;gap:4px;padding:11px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
 .finance-v2-money-stat span{font-size:.78rem;color:var(--muted)}
 .finance-v2-money-stat strong{font-size:1.05rem}
-.finance-v2-money-stat.free{grid-column:1/-1;border-color:rgba(139,92,246,.42);background:rgba(139,92,246,.10);padding:14px}
+.finance-v2-money-stat.free{grid-column:1/-1;border-color:rgba(100,116,139,.42);background:rgba(100,116,139,.10);padding:14px}
 .finance-v2-money-stat.free span{text-transform:uppercase;letter-spacing:.08em;font-weight:850}
 .finance-v2-money-stat.free strong{font-size:clamp(1.7rem,7vw,2.5rem);letter-spacing:-.035em}
 .finance-v2-money-now.negative .finance-v2-money-stat.free{border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.08)}
@@ -93,12 +93,12 @@
 .finance-v2-month-grid>div{display:grid;gap:4px;padding:11px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
 .finance-v2-month-grid span,.finance-v2-month-top span{font-size:.78rem;color:var(--muted)}
 .finance-v2-month-grid strong,.finance-v2-month-top strong{font-size:1rem}
-.finance-v2-month-grid .difference{grid-column:1/-1;border-color:rgba(139,92,246,.30)}
+.finance-v2-month-grid .difference{grid-column:1/-1;border-color:rgba(100,116,139,.30)}
 .finance-v2-month-top{display:grid;gap:7px;margin-top:9px}
 .finance-v2-month-top>div{display:flex;justify-content:space-between;gap:10px;padding:7px 2px;border-bottom:1px solid rgba(148,163,184,.10)}
 .finance-v2-navigation-card,.finance-v2-management-list{padding:8px!important;display:grid;gap:4px}
 .finance-v2-nav-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:0;border-radius:13px;background:transparent;color:inherit;text-align:left;cursor:pointer}
-.finance-v2-nav-row:hover,.finance-v2-nav-row:active{background:rgba(139,92,246,.08)}
+.finance-v2-nav-row:hover,.finance-v2-nav-row:active{background:rgba(100,116,139,.08)}
 .finance-v2-nav-row span{display:grid;gap:2px;min-width:0}.finance-v2-nav-row small{color:var(--muted);font-size:.75rem;overflow-wrap:anywhere}.finance-v2-nav-row b{font-size:1.35rem;opacity:.5;flex:0 0 auto}
 .finance-v2-nav-row.disabled{cursor:default;opacity:.48}.finance-v2-nav-row.disabled:hover{background:transparent}
 .finance-v2-manage-list{display:grid;gap:8px;margin-top:10px;min-width:0}

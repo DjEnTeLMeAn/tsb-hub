@@ -1080,10 +1080,12 @@ function applyActiveTabToDom() {
 
 function setTab(tab) {
   if (!APP_SCREENS.includes(tab)) tab = 'tasks';
+  const tabChanged = state.activeTab !== tab;
   state.activeTab = tab;
   saveActiveTabForSession(tab);
   applyActiveTabToDom();
   renderAll();
+  if (tabChanged) requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 
 function renderAll() {

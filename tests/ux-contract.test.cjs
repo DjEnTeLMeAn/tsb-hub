@@ -75,6 +75,40 @@ test('main redesign contracts are present in app.js', () => {
   assert.match(finance, /renderFinancePlan\(\)/);
 });
 
+test('Tasks list uses press semantics instead of checkbox controls', () => {
+  const row = functionBody(app, 'renderTaskRow');
+  const tasks = functionBody(app, 'renderTasks');
+
+  assert.doesNotMatch(row, /<input[^>]+type=["']checkbox["']/);
+  assert.doesNotMatch(row, /data-task-toggle/);
+  assert.match(row, /data-task-open=/);
+  assert.match(row, /task\.done \? 'done' : ''/);
+  assert.match(tasks, /pointerdown/);
+  assert.match(tasks, /pointerup/);
+  assert.match(tasks, /openTaskActionSheet\(taskId, date\)/);
+  assert.match(tasks, /task\.done = !task\.done/);
+});
+
+test('Tasks action sheet exposes only edit/delete and task edit saves name plus comment', () => {
+  const sheet = functionBody(app, 'openTaskActionSheet');
+  const common = functionBody(app, 'bindCommonActions');
+  const editStart = common.indexOf("$$('[data-task-edit]", 0);
+  const subStart = common.indexOf("$$('[data-task-sub]", editStart);
+  assert.notEqual(editStart, -1, 'task edit handler must exist');
+  assert.notEqual(subStart, -1, 'task subtask handler must exist after task edit handler');
+  const taskEditHandler = common.slice(editStart, subStart);
+
+  assert.equal((sheet.match(/data-task-edit=/g) || []).length, 1);
+  assert.equal((sheet.match(/data-task-delete=/g) || []).length, 1);
+  assert.doesNotMatch(sheet, /data-task-sub/);
+  assert.match(common, /closeTaskActionSheetFor\(btn\);[\s\S]*?data-task-edit/);
+  assert.match(taskEditHandler, /\{ name: 'text', label: 'Название', value: task\.text \}/);
+  assert.match(taskEditHandler, /\{ name: 'note', label: 'Комментарий', value: task\.note \|\| ''/);
+  assert.doesNotMatch(taskEditHandler, /name: 'priority'/);
+  assert.doesNotMatch(taskEditHandler, /name: 'time'/);
+  assert.match(taskEditHandler, /task\.note = String\(result\.note \|\| ''\)\.trim\(\)/);
+});
+
 test('frontend contains no embedded OpenAI API key pattern', () => {
   const frontendFiles = [
     'index.html',

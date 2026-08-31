@@ -1247,10 +1247,6 @@ function openTaskActionSheet(taskId, iso) {
   dialog.addEventListener('click', event => {
     if (event.target === dialog) close();
   });
-  // Close before the existing action handlers open their edit/confirm dialogs.
-  dialog.addEventListener('click', event => {
-    if (event.target.closest('[data-task-edit],[data-task-delete],[data-task-sub]')) close();
-  }, true);
   bindCommonActions(dialog);
   dialog.showModal();
 }
@@ -2421,6 +2417,13 @@ function renderTaskCard(task, iso, compact = false) {
   `;
 }
 
+function closeTaskActionSheetFor(element) {
+  const sheet = element.closest('dialog.task-list-actionsheet');
+  if (!sheet) return;
+  if (sheet.open) sheet.close();
+  sheet.remove();
+}
+
 function renderMealAddForm(scope) {
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -3020,6 +3023,7 @@ function bindCommonActions(root = document) {
 
   $$('[data-task-delete]', root).forEach(btn => {
     btn.onclick = async () => {
+      closeTaskActionSheetFor(btn);
       if (!await openConfirmDialog('Удалить задачу?')) return;
       app.tasks[btn.dataset.date] = getTasks(btn.dataset.date).filter(task => task.id !== btn.dataset.taskDelete);
       markChanged();
@@ -3028,12 +3032,13 @@ function bindCommonActions(root = document) {
 
   $$('[data-task-edit]', root).forEach(btn => {
     btn.onclick = async () => {
+      closeTaskActionSheetFor(btn);
       const task = findTask(btn.dataset.date, btn.dataset.taskEdit);
       if (!task) return;
       const result = await openEditDialog({
         title: 'Изменить задачу',
         fields: [
-          { name: 'text', label: 'Текст задачи', value: task.text },
+          { name: 'text', label: 'Название', value: task.text },
           { name: 'note', label: 'Комментарий', value: task.note || '', placeholder: 'Короткая заметка' }
         ]
       });

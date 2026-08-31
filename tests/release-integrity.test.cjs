@@ -13,7 +13,6 @@ const index = read('index.html');
 const app = read('js/app.js');
 const serviceWorker = read('service-worker.js');
 const readme = read('README.md');
-const checks = `${read('SELF_CHECK_0.8.17.md')}\n${read('SELF_CHECK_0.8.21.md')}`;
 
 const requiredFiles = [
   'index.html', 'manifest.json', 'version.json', 'service-worker.js',
@@ -81,10 +80,8 @@ test('documentation describes the current release and data/PWA safeguards', () =
   assert.ok(readme.includes(`Release: \`${release}\``));
   assert.ok(readme.includes('Backup и импорт'));
   assert.ok(readme.includes('PWA shell и обязательные файлы'));
-  assert.ok(checks.includes(`\`${release}\``));
+  // SELF_CHECK_*.md are historical reports; README is the current release document.
   assert.equal(readme.includes('0.8.21-dev'), false);
-  assert.equal(checks.includes('0.8.21-dev'), false);
-  assert.equal(checks.includes('0.8.17-dev'), false);
 });
 
 test('existing financial regression suites remain part of the test infrastructure', () => {

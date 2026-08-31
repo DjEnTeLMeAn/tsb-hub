@@ -1,12 +1,12 @@
-# TSB Hub v0.13.3-finance-transaction-control-20260808
+# TSB Hub v0.13.4-task-card-fix-20260831
 
 Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
 ## Текущий релиз
 
-- Release: `0.13.3-finance-transaction-control-20260808`
-- Published: `2026-08-08T00:43:00+05:00`
-- Cache: `tsb-hub-0.13.3-finance-transaction-control-20260808`
+- Release: `0.13.4-task-card-fix-20260831`
+- Published: `2026-08-31T00:00:00+07:00`
+- Cache: `tsb-hub-0.13.4-task-card-fix-20260831`
 - Finance schema: `3`
 
 Запуск локально: открыть `index.html`. Для телефона загрузить папку на GitHub Pages и открыть через Chrome или установленное PWA.

@@ -740,6 +740,75 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .date-pill-hint { display: none; }
 }
 
+/* Общий мобильный контракт карточек задач: текст занимает остаток, actions не складываются в столбец. */
+@media (max-width: 900px) {
+  .task-card,
+  .task-top,
+  .task-main,
+  .task-content,
+  .task-card .actions {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .task-card {
+    overflow: hidden;
+  }
+
+  .task-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .task-main {
+    display: grid;
+    grid-template-columns: var(--tap) minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+  }
+
+  .task-content {
+    width: auto;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .task-main > input[type="checkbox"] {
+    width: var(--tap);
+    height: var(--tap);
+    min-width: var(--tap);
+    min-height: var(--tap);
+    flex: 0 0 var(--tap);
+    margin: 0;
+  }
+
+  .task-card .actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .task-card .actions button,
+  .task-card .actions summary {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--tap);
+    padding: 4px 8px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.15;
+  }
+}
+
+@media (max-width: 430px) {
+  .task-card .actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* История стилей: PWA stage. Интерфейс не меняется, добавлена установка через GitHub Pages. */
 
 

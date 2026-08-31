@@ -80,6 +80,11 @@ test('renderAll tolerates a missing selected date label', () => {
   assert.match(renderAll, /const selectedDateLabel = \$\('#selectedDateLabel'\);\s*if \(selectedDateLabel\) selectedDateLabel\.textContent = formatHumanDate\(state\.selectedDate\);/);
 });
 
+test('Food AI demo ignores a stale completion after rerender', () => {
+  const food = functionBody(app, 'renderFood');
+  assert.match(food, /setTimeout\(\(\) => \{\s*if \(state\.foodAi !== ai \|\| state\.foodAi\.date !== state\.selectedDate\) return;\s*ai\.status = ['"]result['"];/);
+});
+
 test('Tasks list uses press semantics instead of checkbox controls', () => {
   const row = functionBody(app, 'renderTaskRow');
   const tasks = functionBody(app, 'renderTasks');

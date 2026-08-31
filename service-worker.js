@@ -1,4 +1,4 @@
-const RELEASE='0.13.7-full-audit-20260831';
+const RELEASE='0.13.8-brand-splash-20260831';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

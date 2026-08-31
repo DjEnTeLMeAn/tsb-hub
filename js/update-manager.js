@@ -1,7 +1,7 @@
-// TSB Hub v0.13.7-full-audit-20260831 — single PWA update authority.
+// TSB Hub v0.13.8-brand-splash-20260831 — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.13.7-full-audit-20260831';
+  const RELEASE='0.13.8-brand-splash-20260831';
   const VERSION_URL='./version.json';
   const RELEASE_PATTERN=/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$/i;
   const MAX_RELEASE_LENGTH=128;

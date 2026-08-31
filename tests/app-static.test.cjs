@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const RELEASE='0.13.7-full-audit-20260831';
+const RELEASE='0.13.8-brand-splash-20260831';
 const app=fs.readFileSync('js/app.js','utf8');
 const index=fs.readFileSync('index.html','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');

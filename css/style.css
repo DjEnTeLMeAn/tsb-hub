@@ -27,6 +27,84 @@ body { margin: 0; min-height: 100dvh; background: var(--bg); }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0 16px 12vh;
+  background: var(--bg);
+  color: var(--text);
+  pointer-events: none;
+  animation: app-splash-fade-in .7s ease both;
+}
+.app-splash::before,
+.app-splash::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+.app-splash::before {
+  width: min(78vw, 620px);
+  height: min(36vw, 290px);
+  top: 50%;
+  left: 50%;
+  border-radius: 43% 57% 51% 49% / 58% 42% 58% 42%;
+  background: linear-gradient(112deg, rgba(30, 41, 59, .96), rgba(15, 23, 42, .72));
+  box-shadow: 0 0 80px rgba(30, 41, 59, .72), inset 0 0 42px rgba(100, 116, 139, .1);
+  filter: blur(24px);
+  opacity: .92;
+  transform: translate(-54%, -64%) rotate(-4deg);
+}
+.app-splash::after {
+  width: min(46vw, 360px);
+  height: min(30vw, 240px);
+  top: 42%;
+  left: 57%;
+  border-radius: 48% 52% 62% 38% / 40% 58% 42% 60%;
+  background: radial-gradient(ellipse, rgba(100, 116, 139, .2), transparent 68%);
+  filter: blur(32px);
+  opacity: .72;
+  transform: translate(-50%, -50%) rotate(12deg);
+}
+.app-splash-title {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 100%;
+  color: var(--text);
+  font-size: clamp(1.7rem, 6vw, 2.45rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: app-splash-title-in .85s ease .08s both;
+}
+.app-loaded .app-splash {
+  animation: app-splash-fade-out .45s ease forwards;
+}
+@keyframes app-splash-title-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes app-splash-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes app-splash-fade-out {
+  from { opacity: 1; visibility: visible; }
+  to { opacity: 0; visibility: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-splash, .app-splash-title { animation: none; }
+  .app-splash { opacity: 0; visibility: hidden; }
+}
+
 .app-shell { width: min(1440px, 100%); margin: 0 auto; padding: 18px; }
 .app-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
 .brand-block { display: flex; align-items: center; gap: 12px; min-width: 0; }

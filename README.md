@@ -1,12 +1,12 @@
-# TSB Hub v0.13.7-full-audit-20260831
+# TSB Hub v0.13.8-brand-splash-20260831
 
 Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
 ## Текущий релиз
 
-- Release: `0.13.7-full-audit-20260831`
+- Release: `0.13.8-brand-splash-20260831`
 - Published: `2026-08-31T00:00:00+07:00`
-- Cache: `tsb-hub-0.13.7-full-audit-20260831`
+- Cache: `tsb-hub-0.13.8-brand-splash-20260831`
 - Finance schema: `3`
 
 Запуск локально: открыть `index.html`. Для телефона загрузить папку на GitHub Pages и открыть через Chrome или установленное PWA.

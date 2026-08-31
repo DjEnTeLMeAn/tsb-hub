@@ -75,6 +75,11 @@ test('main redesign contracts are present in app.js', () => {
   assert.match(finance, /renderFinancePlan\(\)/);
 });
 
+test('renderAll tolerates a missing selected date label', () => {
+  const renderAll = functionBody(app, 'renderAll');
+  assert.match(renderAll, /const selectedDateLabel = \$\('#selectedDateLabel'\);\s*if \(selectedDateLabel\) selectedDateLabel\.textContent = formatHumanDate\(state\.selectedDate\);/);
+});
+
 test('Tasks list uses press semantics instead of checkbox controls', () => {
   const row = functionBody(app, 'renderTaskRow');
   const tasks = functionBody(app, 'renderTasks');

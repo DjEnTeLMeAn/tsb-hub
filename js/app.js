@@ -1090,7 +1090,8 @@ function setTab(tab) {
 
 function renderAll() {
   applyActiveTabToDom();
-  $('#selectedDateLabel').textContent = formatHumanDate(state.selectedDate);
+  const selectedDateLabel = $('#selectedDateLabel');
+  if (selectedDateLabel) selectedDateLabel.textContent = formatHumanDate(state.selectedDate);
   const renderSteps = [
     ['desktopCalendar', () => renderCalendar($('#desktopCalendar'))],
     ['mobileCalendar', () => renderCalendar($('#mobileCalendar'))],

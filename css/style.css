@@ -168,8 +168,18 @@ h3 { font-size: 1rem; }
   font-weight: 800;
 }
 #tab-tasks .task-main {
+  display: flex;
   align-items: flex-start;
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
+}
+#tab-tasks .task-content {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 #tab-tasks .task-main > input[type="checkbox"],
 #tab-tasks .subtask > input[type="checkbox"] {

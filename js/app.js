@@ -1225,7 +1225,7 @@ function renderTaskRow(task, iso) {
   return `<article class="task-card task-row ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}">
     <div class="task-top">
       <label class="task-main"><input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
-        <span><span class="task-text">${taskText}</span><span class="task-meta" aria-label="Статус и время задачи"><span class="task-status">${status}</span>${time ? `<time class="task-time" datetime="${escapeHTML(time)}">${escapeHTML(time)}</time>` : ''}</span></span></label>
+        <span class="task-content"><span class="task-text">${taskText}</span><span class="task-meta" aria-label="Статус и время задачи"><span class="task-status">${status}</span>${time ? `<time class="task-time" datetime="${escapeHTML(time)}">${escapeHTML(time)}</time>` : ''}</span></span></label>
       <div class="actions">
         <button class="ghost-button" type="button" data-task-sub="${taskId}" data-date="${escapeHTML(iso)}">Подзадачи</button>
         <button class="ghost-button" type="button" data-task-edit="${taskId}" data-date="${escapeHTML(iso)}">Изм.</button>
@@ -2365,7 +2365,7 @@ function renderTaskCard(task, iso, compact = false) {
       <div class="task-top">
         <div class="task-main">
           <input type="checkbox" data-task-toggle="${task.id}" data-date="${iso}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
-          <div>
+          <div class="task-content">
             <div class="task-text">${escapeHTML(task.text)}</div>
             <div class="badge-row">${statusBadges}</div>
           </div>

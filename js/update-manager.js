@@ -1,7 +1,7 @@
-// TSB Hub v0.13.4-task-card-fix — single PWA update authority.
+// TSB Hub v0.13.5-task-list-rewrite — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.13.4-task-card-fix-20260831';
+  const RELEASE='0.13.5-task-list-rewrite-20260831';
   const VERSION_URL='./version.json';
   const RELEASE_PATTERN=/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$/i;
   const MAX_RELEASE_LENGTH=128;

@@ -1,4 +1,4 @@
-const RELEASE='0.13.4-task-card-fix-20260831';
+const RELEASE='0.13.5-task-list-rewrite-20260831';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,

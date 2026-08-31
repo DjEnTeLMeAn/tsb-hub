@@ -436,12 +436,17 @@
     }).sort((a,b)=>transactionSortKey(b).localeCompare(transactionSortKey(a)));
   }
   function transactionExists(finance,id){return normalizeFinance(finance).transactions.some(transaction=>transaction.id===id)}
+  function transactionAccountsAvailable(finance,transaction){
+    const accountIds=transaction?.type===TYPES.TRANSFER?[transaction.fromAccountId,transaction.toAccountId]:[transaction?.accountId];
+    return accountIds.every(accountId=>finance.accounts.some(account=>account.id===accountId&&account.active&&!account.archived));
+  }
   function createTransaction(finance,draft,{now=nowISO(),idFactory=makeId}={}){
     const state=normalizeFinance(finance,now);
     const candidate={...clone(draft),id:text(draft?.id)||idFactory('txn'),createdAt:text(draft?.createdAt)||now,updatedAt:now};
     const transaction=normalizeTransaction(candidate,now);
     const check=validateTransactionShape(transaction);
     if(!check.ok)return {ok:false,error:check.error,finance:state};
+    if(!transactionAccountsAvailable(state,transaction))return {ok:false,error:'ACCOUNT_NOT_FOUND',finance:state};
     if(transactionExists(state,transaction.id))return {ok:false,error:'DUPLICATE_ID',finance:state};
     state.transactions.push(transaction);
     return {ok:true,finance:state,transaction};
@@ -456,6 +461,7 @@
     const transaction=normalizeTransaction(candidate,now);
     const check=validateTransactionShape(transaction);
     if(!check.ok)return {ok:false,error:check.error,finance:state};
+    if(!transactionAccountsAvailable(state,transaction))return {ok:false,error:'ACCOUNT_NOT_FOUND',finance:state};
     state.transactions[index]=transaction;
     return {ok:true,finance:state,transaction,previous:current};
   }

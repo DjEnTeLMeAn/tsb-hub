@@ -36,6 +36,29 @@ test('ADJUSTMENT preserves systemKind and signed amount',()=>{
   assert.equal(core.validateTransactionShape(row).ok,true);
 });
 
+test('transaction mutations reject missing or inactive account references',()=>{
+  let f=core.createEmptyFinance('2026-08-07T00:00:00.000Z');
+  f=core.createAccount(f,{id:'a1',name:'Карта',isDefault:true}).finance;
+  const missing=core.createTransaction(f,{id:'missing',type:'EXPENSE',amount:100,accountId:'unknown',categoryId:'food',date:'2026-08-07'});
+  assert.equal(missing.ok,false);
+  assert.equal(missing.error,'ACCOUNT_NOT_FOUND');
+  assert.equal(missing.finance.transactions.length,0);
+
+  f=core.createAccount(f,{id:'a2',name:'Наличные'}).finance;
+  const archived=core.archiveAccount(f,'a2');
+  assert.equal(archived.ok,true);
+  f=archived.finance;
+  const inactive=core.createTransaction(f,{id:'inactive',type:'TRANSFER',amount:100,fromAccountId:'a1',toAccountId:'a2',date:'2026-08-07'});
+  assert.equal(inactive.ok,false);
+  assert.equal(inactive.error,'ACCOUNT_NOT_FOUND');
+
+  f=core.createTransaction(f,{id:'e1',type:'EXPENSE',amount:100,accountId:'a1',categoryId:'food',date:'2026-08-07'}).finance;
+  const edited=core.updateTransaction(f,'e1',{accountId:'unknown'});
+  assert.equal(edited.ok,false);
+  assert.equal(edited.error,'ACCOUNT_NOT_FOUND');
+  assert.equal(edited.finance.transactions.find(x=>x.id==='e1').accountId,'a1');
+});
+
 test('legacy migration preserves reserve as legacy and migrates only completed events',()=>{
   const legacyFinance={
     '2026-08-07':{expenses:[{id:'e1',amount:'250',category:'food',comment:'магазин',time:'17:42',createdAt:'2026-08-07T17:42:00.000Z'}]}
@@ -278,6 +301,7 @@ test('coverage selector uses the same free-money calculation',()=>{
 test('Part3 analytics uses only INCOME and EXPENSE inside the selected period',()=>{
   let f=core.createEmptyFinance('2026-08-01T00:00:00.000Z');
   f=core.createAccount(f,{id:'cash',name:'Cash',isDefault:true},{now:'2026-08-01T00:00:00.000Z'}).finance;
+  f=core.createAccount(f,{id:'cash2',name:'Cash 2'},{now:'2026-08-01T00:00:00.000Z'}).finance;
   const add=d=>{const r=core.createTransaction(f,d,{now:`${d.date}T12:00:00.000Z`,idFactory:()=>`t_${Math.random()}`});assert.equal(r.ok,true);f=r.finance};
   add({type:'INCOME',amount:10000,accountId:'cash',incomeTypeId:'personal',date:'2026-08-01'});
   add({type:'EXPENSE',amount:1200,accountId:'cash',categoryId:'food',date:'2026-08-02'});

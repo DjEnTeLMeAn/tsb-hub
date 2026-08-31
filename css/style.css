@@ -124,12 +124,12 @@ h3 { font-size: 1rem; }
   padding: 8px 12px;
   border: 1px solid rgba(148,163,184,.18);
   border-radius: 12px;
-  background: rgba(255,255,255,.035);
+  background: rgba(15,23,42,.86);
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
 }
 .task-list-item:hover,
-.task-list-item:focus-visible { background: rgba(255,255,255,.07); border-color: rgba(148,163,184,.42); outline: none; }
+.task-list-item:focus-visible { background: rgba(30,41,59,.94); border-color: rgba(148,163,184,.42); outline: none; }
 .task-list-item.done,
 .task-list-item.dismissed { opacity: .58; }
 .task-list-main { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; cursor: pointer; }

@@ -1217,13 +1217,13 @@ function renderDailyReportCard() {
 }
 
 function renderTaskRow(task, iso) {
-  const time = task.time || task.dueTime || '';
+  const note = String(task.note || '').trim();
   const taskText = escapeHTML(task.text);
   const taskId = escapeHTML(task.id);
   return `<article class="task-list-item ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}" data-task-open="${taskId}" data-date="${escapeHTML(iso)}" role="button" tabindex="0" aria-label="Открыть задачу «${taskText}»">
     <label class="task-list-main">
       <input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
-      <span class="task-list-copy"><span class="task-list-title">${taskText}</span>${time ? `<span class="task-list-meta"><time datetime="${escapeHTML(time)}">${escapeHTML(time)}</time></span>` : ''}</span>
+      <span class="task-list-copy"><span class="task-list-title">${taskText}</span>${note ? `<span class="task-list-meta">${escapeHTML(note)}</span>` : ''}</span>
     </label>
   </article>`;
 }
@@ -1235,12 +1235,10 @@ function openTaskActionSheet(taskId, iso) {
   dialog.className = 'task-list-actionsheet';
   const safeId = escapeHTML(task.id);
   const safeDate = escapeHTML(iso);
-  const subtaskCount = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
   dialog.innerHTML = `<div class="task-list-actionsheet-panel">
     <div class="task-list-actionsheet-header"><div><p class="muted">${escapeHTML(iso === state.selectedDate ? 'Сегодня' : 'Завтра')}</p><h2>${escapeHTML(task.text)}</h2></div><button class="icon-button" type="button" data-task-sheet-close aria-label="Закрыть">×</button></div>
-    ${task.time ? `<p class="task-list-actionsheet-meta">Время: ${escapeHTML(task.time)}</p>` : ''}
+    ${task.note ? `<p class="task-list-actionsheet-meta">${escapeHTML(task.note)}</p>` : ''}
     <div class="task-list-actionsheet-actions">
-      <button class="ghost-button" type="button" data-task-sub="${safeId}" data-date="${safeDate}">Подзадачи${subtaskCount ? ` · ${subtaskCount}` : ''}</button>
       <button class="ghost-button" type="button" data-task-edit="${safeId}" data-date="${safeDate}">Изменить</button>
       <button class="danger-button" type="button" data-task-delete="${safeId}" data-date="${safeDate}">Удалить</button>
     </div>
@@ -1274,9 +1272,34 @@ function renderTasks() {
     </section></section>`;
   root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
   root.querySelectorAll('[data-task-open]').forEach(row => {
-    const open = () => openTaskActionSheet(row.dataset.taskOpen, row.dataset.date);
-    row.addEventListener('click', event => { if (!event.target.closest('input,button,a,select,textarea')) open(); });
-    row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+    let pressStartedAt = 0;
+    let longPressTimer = null;
+    let longPressTriggered = false;
+    const taskId = row.dataset.taskOpen;
+    const date = row.dataset.date;
+    const toggle = () => {
+      const task = findTask(date, taskId);
+      if (!task) return;
+      task.done = !task.done;
+      task.failed = false;
+      task.completedAt = task.done ? (task.completedAt || new Date().toISOString()) : '';
+      task.completedForDate = task.done ? date : '';
+      task.completionMode = task.done ? (task.completionMode || 'same_day') : '';
+      markChanged();
+    };
+    row.addEventListener('pointerdown', event => {
+      if (event.target.closest('input,button,a,select,textarea')) return;
+      pressStartedAt = Date.now();
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => { longPressTriggered = true; openTaskActionSheet(taskId, date); }, 550);
+    });
+    row.addEventListener('pointerup', event => {
+      if (event.target.closest('input,button,a,select,textarea')) return;
+      if (longPressTimer) clearTimeout(longPressTimer);
+      if (!longPressTriggered && Date.now() - pressStartedAt < 550) toggle();
+    });
+    row.addEventListener('pointercancel', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+    row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openTaskActionSheet(taskId, date); } });
   });
   root.querySelector('[data-task-add]')?.addEventListener('click', event => {
     const formWrap = root.querySelector('[data-task-add-form]');
@@ -2350,7 +2373,7 @@ function renderTaskAddForm(iso, scope) {
   return `
     <form class="form-grid" data-task-form data-date="${iso}" data-scope="${scope}">
       <label>Новая задача<input name="text" required placeholder="Что нужно сделать"></label>
-      <label>Время <span class="muted">(необязательно)</span><input name="time" type="time"></label>
+      <label>Комментарий <span class="muted">(необязательно)</span><input name="note" maxlength="160" placeholder="Короткая заметка"></label>
       <button class="primary-button" type="submit">Добавить</button>
     </form>
   `;
@@ -2966,12 +2989,12 @@ function bindCommonActions(root = document) {
         id: uid('task'),
         text,
         priority: 'important',
-        time: String(fd.get('time') || '').trim(),
+        time: '',
         done: false,
         failed: false,
         dismissed: false,
         subtasks: [],
-        note: '',
+        note: String(fd.get('note') || '').trim(),
         createdAt: new Date().toISOString(),
         originalDate: iso
       });

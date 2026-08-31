@@ -53,6 +53,22 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
   width:100%!important;
   justify-content:center!important;
 }
+.app-header .date-navigation-row{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  width:auto!important;
+  height:52px!important;
+  min-height:52px!important;
+  max-height:none!important;
+  margin:0!important;
+}
+.app-header .date-navigation-row .date-switcher{
+  width:100%!important;
+  min-width:0!important;
+}
+.app-header .date-navigation-row .date-pill{
+  min-width:0!important;
+}
 
 /* Stage 2 mobile finish: compact fields, wrapped copy, and visible menu states. */
 @media(max-width:900px){

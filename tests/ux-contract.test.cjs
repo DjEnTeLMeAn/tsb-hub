@@ -89,6 +89,14 @@ test('Tasks list uses press semantics instead of checkbox controls', () => {
   assert.match(tasks, /task\.done = !task\.done/);
 });
 
+test('task priority is not used by task presentation or reports', () => {
+  assert.doesNotMatch(app, /function priorityRank\(/);
+  assert.doesNotMatch(functionBody(app, 'renderTaskCard'), /PRIORITIES/);
+  assert.doesNotMatch(functionBody(app, 'renderTaskList'), /priorityRank/);
+  assert.doesNotMatch(functionBody(app, 'getPendingPastTasksHTML'), /task\.priority|PRIORITIES/);
+  assert.doesNotMatch(functionBody(app, 'buildGptReport'), /task\.priority|PRIORITIES/);
+});
+
 test('Tasks action sheet exposes only edit/delete and task edit saves name plus comment', () => {
   const sheet = functionBody(app, 'openTaskActionSheet');
   const common = functionBody(app, 'bindCommonActions');

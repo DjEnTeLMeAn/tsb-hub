@@ -2374,20 +2374,14 @@ function renderTaskAddForm(iso, scope) {
 
 function renderTaskList(iso, compact = false) {
   const tasks = getTasks(iso)
-    .filter(task => !(app.settings.hideDone && (task.done || task.dismissed)))
-    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+    .filter(task => !(app.settings.hideDone && (task.done || task.dismissed)));
   if (!tasks.length) return '<div class="empty">Задач нет.</div>';
   return tasks.map(task => renderTaskCard(task, iso, compact)).join('');
-}
-
-function priorityRank(priority) {
-  return { critical: 0, important: 1, secondary: 2 }[priority] ?? 1;
 }
 
 function renderTaskCard(task, iso, compact = false) {
   const isPastIncomplete = iso < toISODate(new Date()) && !task.done && !task.dismissed;
   const statusBadges = [
-    `<span class="badge ${task.priority}">${PRIORITIES[task.priority] || 'Важно'}</span>`,
     task.done ? '<span class="badge done-badge">Выполнено</span>' : '',
     (task.failed || isPastIncomplete) ? '<span class="badge overdue">Пропущено</span>' : '',
     task.dismissed ? '<span class="badge muted-badge">Скрыто</span>' : ''
@@ -2512,7 +2506,7 @@ function getPendingPastTasksHTML() {
     .map(({ iso, task }) => `
       <article class="task-card past-task-card">
         <div class="task-top">
-          <div><div class="task-text">${escapeHTML(task.text)}</div><div class="badge-row"><span class="badge overdue">${shortDate(iso)}</span><span class="badge ${task.priority}">${PRIORITIES[task.priority] || 'Важно'}</span><span class="badge overdue">Пропущено</span></div></div>
+          <div><div class="task-text">${escapeHTML(task.text)}</div><div class="badge-row"><span class="badge overdue">${shortDate(iso)}</span><span class="badge overdue">Пропущено</span></div></div>
           <div class="actions past-task-actions">
             <button class="ghost-button" data-task-complete-past="${task.id}" data-date="${iso}">Выполнено</button>
             <button class="ghost-button" data-task-move="${task.id}" data-date="${iso}">Перенести</button>
@@ -3318,7 +3312,7 @@ function buildGptReport() {
     const daily = getDailyReport(iso);
     const reportLine = hasDailyReport(iso) ? `самоощущение ${daily.selfScore || '—'}/100, желание действовать ${daily.driveScore || '—'}/100, итог: ${daily.text || 'без текста'}` : 'не заполнен';
     const mealLines = health.meals.length ? health.meals.map(meal => `    - ${meal.time || 'без времени'} · ${meal.name}${meal.amount ? ` (${meal.amount})` : ''}`).join('\n') : '    - питания не записано';
-    const taskLines = tasks.length ? tasks.map(task => `    - [${task.done ? 'x' : ' '}] ${PRIORITIES[task.priority] || 'Важно'}: ${task.text}`).join('\n') : '    - задач нет';
+    const taskLines = tasks.length ? tasks.map(task => `    - [${task.done ? 'x' : ' '}] ${task.text}`).join('\n') : '    - задач нет';
     const financeLines = finance.expenses.length ? finance.expenses.map(expense => `    - ${expense.time || 'без времени'} · ${getFinanceCategoryLabel(expense.category)} · ${formatRub(expense.amount)}${expense.comment ? ` · ${expense.comment}` : ''}`).join('\n') : '    - трат не записано';
     lines.push(`\n${WEEKDAY_SHORT[i]} · ${formatHumanDate(iso)}\n  Ежедневный отчёт: ${reportLine}\n  Задачи: ${progress.done}/${progress.total}, выполнение ${progress.pct}%\n${taskLines}\n  Питание:\n${mealLines}\n  Вес: ${health.weight ? `${health.weight} кг` : 'не указан'}\n  Активность: ${health.activityNote || 'не указана'}\n  Заметка: ${health.note || 'нет'}\n  Финансы дня: потрачено ${formatRub(financeSummary.total)}, еда ${formatRub(financeSummary.food)}, транспорт ${formatRub(financeSummary.transport)}, другое ${formatRub(financeSummary.other)}\n${financeLines}\n  Локальные подсказки:\n${getLocalInsightsReportText(iso)}`);
   }

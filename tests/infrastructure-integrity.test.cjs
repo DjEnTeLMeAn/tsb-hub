@@ -6,8 +6,10 @@ const test = require('node:test');
 const root = process.cwd();
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const exists = file => fs.existsSync(path.join(root, file));
+const vm = require('node:vm');
 
 const app = read('js/app.js');
+const storage = read('js/storage.js');
 const index = read('index.html');
 const updateManager = read('js/update-manager.js');
 const serviceWorker = read('service-worker.js');
@@ -64,6 +66,25 @@ test('full and Finance exports declare their backup type and format version', ()
   assert.match(app, /function buildFullBackupObject[\s\S]*?exportObject\.formatVersion\s*=\s*BACKUP_FORMAT_VERSION/);
   assert.match(app, /parsed\?\.backupType !== FULL_BACKUP_TYPE \|\| parsed\?\.formatVersion !== BACKUP_FORMAT_VERSION/);
   assert.match(app, /parsed\?\.backupType === FINANCE_BACKUP_TYPE/);
+});
+
+test('storage uses a valid recovery backup when the primary data payload is unusable', () => {
+  const values = new Map([
+    ['tsb_hub_data_v1', '{broken'],
+    ['tsb_hub_data_v1_recovery', JSON.stringify({ meta: { marker: 'recovery' } })]
+  ]);
+  const localStorage = {
+    getItem: key => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: key => values.delete(key)
+  };
+  const context = { window: { localStorage } };
+  vm.runInNewContext(storage, context);
+
+  assert.equal(context.window.TSBStorage.get('tsb_hub_data_v1'), values.get('tsb_hub_data_v1_recovery'));
+  values.delete('tsb_hub_data_v1');
+  assert.equal(context.window.TSBStorage.get('tsb_hub_data_v1'), values.get('tsb_hub_data_v1_recovery'));
+  assert.equal(context.window.TSBStorage.get('tsb_hub_data_v1_recovery'), values.get('tsb_hub_data_v1_recovery'));
 });
 
 test('Service Worker registration has one owner: update-manager, never app.js', () => {

@@ -21,9 +21,23 @@
     oldHealthSettings: OLD_HEALTH_SETTINGS_KEY
   });
 
+  function isDataPayload(value) {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    try {
+      const parsed = JSON.parse(value);
+      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed);
+    } catch (error) {
+      return false;
+    }
+  }
+
   function get(key) {
     try {
-      return global.localStorage.getItem(key);
+      const value = global.localStorage.getItem(key);
+      if (key !== STORAGE_KEY || isDataPayload(value)) return value;
+
+      const recovery = global.localStorage.getItem(RECOVERY_BACKUP_KEY);
+      return isDataPayload(recovery) ? recovery : value;
     } catch (error) {
       return null;
     }

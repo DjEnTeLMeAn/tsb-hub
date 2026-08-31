@@ -131,3 +131,37 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
 @media(max-width:430px){
   body .task-card,body .meal-card,body .important-card,body .finance-card{padding:12px!important;}
 }
+
+/* Tasks mobile contract: one-column reading flow, no overflow at 320px. */
+@media(max-width:900px){
+  body #tab-tasks{min-width:0;overflow-x:hidden;}
+  body #tab-tasks .page-heading,
+  body #tab-tasks .section-heading{align-items:stretch;flex-direction:column;gap:10px;}
+  body #tab-tasks .section-block{min-width:0;padding:14px;border-radius:16px;gap:12px;}
+  body #tab-tasks .segmented-control{width:100%;}
+  body #tab-tasks .segmented-control button{flex:1 1 0;min-width:0;}
+  body #tab-tasks .section-heading .compact-action{width:100%;}
+  body #tab-tasks .task-card,
+  body #tab-tasks .task-row{min-width:0;padding:12px;border-radius:14px;}
+  body #tab-tasks .task-top{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;}
+  body #tab-tasks .task-main{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;width:100%;}
+  body #tab-tasks .task-main > div{min-width:0;}
+  body #tab-tasks .task-text{overflow-wrap:anywhere;word-break:break-word;}
+  body #tab-tasks .task-meta{gap:4px 8px;}
+  body #tab-tasks .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%;min-width:0;}
+  body #tab-tasks .actions button,
+  body #tab-tasks .actions summary{width:100%;min-width:0;min-height:44px;padding:4px 6px;white-space:normal;overflow-wrap:anywhere;line-height:1.15;}
+  body #tab-tasks .subtasks{padding-left:0;}
+  body #tab-tasks .subtask{min-height:44px;align-items:center;min-width:0;}
+  body #tab-tasks .subtask span{min-width:0;overflow-wrap:anywhere;word-break:break-word;}
+  body #tab-tasks .weekly-statistics .section-heading{flex-direction:row;align-items:center;}
+}
+@media(max-width:430px){
+  body #tab-tasks .section-block{padding:12px;}
+  body #tab-tasks .task-card,
+  body #tab-tasks .task-row{padding:11px;}
+  body #tab-tasks .actions{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media(max-width:340px){
+  body #tab-tasks .actions{grid-template-columns:1fr;}
+}

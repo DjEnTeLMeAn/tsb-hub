@@ -1220,10 +1220,19 @@ function renderTaskRow(task, iso) {
   const time = task.time || task.dueTime || '';
   const taskText = escapeHTML(task.text);
   const taskId = escapeHTML(task.id);
-  const status = task.done ? 'Выполнено' : 'Не выполнено';
-  return `<article class="task-card task-row ${task.done ? 'done' : ''}">
-    <label class="task-main"><input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
-      <span><span class="task-text">${taskText}</span><span class="task-meta" aria-label="Статус и время задачи"><span class="task-status">${status}</span>${time ? `<time class="task-time" datetime="${escapeHTML(time)}">Время: ${escapeHTML(time)}</time>` : '<span class="task-time">Время не указано</span>'}</span></span></label>
+  const status = task.done ? 'Выполнено' : task.dismissed ? 'Скрыто' : 'Не выполнено';
+  const priority = task.priority && PRIORITIES[task.priority] ? `<span class="badge ${escapeHTML(task.priority)}">${escapeHTML(PRIORITIES[task.priority])}</span>` : '';
+  return `<article class="task-card task-row ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}">
+    <div class="task-top">
+      <label class="task-main"><input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
+        <span><span class="task-text">${taskText}</span><span class="task-meta" aria-label="Статус и время задачи"><span class="task-status">${status}</span>${time ? `<time class="task-time" datetime="${escapeHTML(time)}">${escapeHTML(time)}</time>` : ''}</span></span></label>
+      <div class="actions">
+        <button class="ghost-button" type="button" data-task-sub="${taskId}" data-date="${escapeHTML(iso)}">Подзадачи</button>
+        <button class="ghost-button" type="button" data-task-edit="${taskId}" data-date="${escapeHTML(iso)}">Изм.</button>
+        <button class="danger-button" type="button" data-task-delete="${taskId}" data-date="${escapeHTML(iso)}">Удал.</button>
+      </div>
+    </div>
+    <div class="badge-row">${priority}</div>
   </article>`;
 }
 
@@ -1231,20 +1240,23 @@ function renderTasks() {
   const root = $('#tab-tasks');
   if (!root) return;
   const iso = state.taskPeriod === 'tomorrow' ? addDays(state.selectedDate, 1) : state.selectedDate;
-  const tasks = getTasks(iso).filter(task => !(app.settings.hideDone && (task.done || task.dismissed)));
+  const allTasks = getTasks(iso).filter(task => !(app.settings.hideDone && (task.done || task.dismissed)));
+  const activeTasks = allTasks.filter(task => !task.done && !task.dismissed);
+  const completedTasks = allTasks.filter(task => task.done || task.dismissed);
   const monday = getMondayISO(state.selectedDate);
   const week = Array.from({ length: 7 }, (_, index) => getProgress(addDays(monday, index)));
   const total = week.reduce((sum, item) => sum + item.total, 0);
   const done = week.reduce((sum, item) => sum + item.done, 0);
   const pct = total ? Math.round(done / total * 100) : 0;
   const periodLabel = state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня';
-  root.innerHTML = `<section class="page-heading"><div><p class="muted">План на выбранный период</p><h1>Задачи</h1></div></section>
+  root.innerHTML = `<section class="page-heading"><div><p class="muted">${periodLabel} · ${formatHumanDate(iso)}</p><h1>Задачи</h1><p class="muted">${activeTasks.length ? `${activeTasks.length} активных ${activeTasks.length === 1 ? 'задача' : 'задач'}` : 'Активных задач нет'}</p></div></section>
     <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today" aria-current="${state.taskPeriod === 'today' ? 'page' : 'false'}">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow" aria-current="${state.taskPeriod === 'tomorrow' ? 'page' : 'false'}">Завтра</button></nav>
-    <section class="section-block"><div class="section-heading"><div><p class="muted">${formatHumanDate(iso)}</p><h2>${periodLabel}</h2><p class="muted">${tasks.length ? `${tasks.length} ${tasks.length === 1 ? 'задача' : 'задач'}` : 'Пока пусто'}</p></div><button class="primary-button compact-action" type="button" data-task-add aria-label="Добавить задачу на ${periodLabel.toLowerCase()}" aria-controls="task-add-form-${state.taskPeriod}" aria-expanded="false">+ Добавить задачу</button></div>
-      <div class="task-list task-list-clean">${tasks.length ? tasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state"><strong>На этот день задач нет</strong><p class="muted">Добавьте одну небольшую задачу, чтобы начать план.</p></div>'}</div>
-      <div class="action-disclosure" id="task-add-form-${state.taskPeriod}" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
+    <section class="section-block"><div class="section-heading"><div><h2>${periodLabel}</h2><p class="muted">Сначала — то, что ещё нужно сделать.</p></div><button class="primary-button compact-action" type="button" data-task-add aria-label="Добавить задачу на ${periodLabel.toLowerCase()}" aria-controls="task-add-form-${state.taskPeriod}" aria-expanded="false">+ Добавить задачу</button></div>
+      <div class="action-disclosure task-quick-add" id="task-add-form-${state.taskPeriod}" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
+      <div class="task-list task-list-clean">${activeTasks.length ? activeTasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state"><strong>На этот день активных задач нет</strong><p class="muted">Добавьте одну небольшую задачу, чтобы начать план.</p></div>'}</div>
+      ${completedTasks.length ? `<details class="collapsible-list today-details task-completed" data-details-key="tasks-completed-${state.taskPeriod}"><summary>Выполненные и скрытые · ${completedTasks.length}</summary><div class="task-list task-list-clean">${completedTasks.map(task => renderTaskRow(task, iso)).join('')}</div></details>` : ''}
     </section>
-    <section class="section-block weekly-statistics" aria-labelledby="tasks-week-heading"><div class="section-heading"><div><h2 id="tasks-week-heading">Прогресс недели</h2><p class="muted" id="tasks-week-summary">${done ? `Выполнено ${done} из ${total}` : 'Начните с первой задачи'}</p></div><strong aria-hidden="true">${pct}%</strong></div><div class="progress" role="progressbar" aria-label="Выполнено за неделю" aria-describedby="tasks-week-summary" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div></section>`;
+    <section class="section-block weekly-statistics" aria-labelledby="tasks-week-heading"><div class="section-heading"><div><h2 id="tasks-week-heading">Неделя</h2><p class="muted" id="tasks-week-summary">${done ? `Выполнено ${done} из ${total}` : 'Начните с первой задачи'}</p></div><strong aria-hidden="true">${pct}%</strong></div><div class="progress" role="progressbar" aria-label="Выполнено за неделю" aria-describedby="tasks-week-summary" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div></section>`;
   root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
   root.querySelector('[data-task-add]')?.addEventListener('click', event => {
     const formWrap = root.querySelector('[data-task-add-form]');

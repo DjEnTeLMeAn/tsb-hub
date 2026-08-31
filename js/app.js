@@ -1390,25 +1390,32 @@ function renderFoodMacros(nutrition) {
 
 function renderFoodMealPreview(iso = state.selectedDate) {
   const meals = getHealth(iso).meals || [];
-  if (!meals.length) return '<div class="empty">За выбранный день ещё нет записей. Отсканируй блюдо или добавь его вручную.</div>';
-  return meals.map(meal => `<article class="meal-card">
-    <div class="item-top"><div><div class="badge-row"><span class="badge">${escapeHTML(meal.time || 'без времени')}</span></div>
-    <h3>${escapeHTML(meal.name || 'Приём пищи')}</h3>${meal.amount ? `<p class="muted">${escapeHTML(meal.amount)}</p>` : ''}</div></div>
-  </article>`).join('');
+  if (!meals.length) return '<div class="empty" role="status">За выбранный день ещё нет записей. Отсканируй блюдо или добавь его вручную.</div>';
+  return meals.map(meal => {
+    const name = meal.name || 'Приём пищи';
+    const time = meal.time || 'Без времени';
+    return `<article class="meal-card" aria-label="${escapeHTML(name)}${meal.time ? `, ${escapeHTML(time)}` : ''}">
+      <div class="item-top"><div>
+        <div class="badge-row"><span class="badge">${escapeHTML(time)}</span></div>
+        <h3>${escapeHTML(name)}</h3>
+        ${meal.amount ? `<p class="muted">${escapeHTML(meal.amount)}</p>` : '<p class="muted">Количество не указано</p>'}
+      </div></div>
+    </article>`;
+  }).join('');
 }
 
 function renderFoodAiCard() {
   const ai = getFoodAiState();
-  if (ai.status === 'selecting') return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>Фото блюда</h2><p class="muted">Выбери фото для анализа.</p></div></div>${IS_DEVELOPMENT ? '<div class="actions"><button class="primary-button" type="button" data-food-ai-demo>Показать анализ</button><button class="ghost-button" type="button" data-food-ai-error>Показать ошибку</button><button class="ghost-button" type="button" data-food-ai-discard>Отмена</button></div>' : ''}</div>`;
-  if (ai.status === 'analysing') return `<div class="card" data-food-ai-panel><h2>Анализ блюда…</h2><p class="muted">Подожди немного.</p></div>`;
-  if (ai.status === 'error') return `<div class="card warning-card" data-food-ai-panel><h2>Не удалось распознать блюдо</h2><p>${escapeHTML(ai.error || 'Попробуй ещё раз.')}</p><button class="ghost-button" type="button" data-food-ai-scan>Повторить сканирование</button></div>`;
+  if (ai.status === 'selecting') return `<section class="card" data-food-ai-panel role="region" aria-labelledby="food-ai-title" aria-live="polite"><div class="card-title-row"><div><h2 id="food-ai-title">Фото блюда</h2><p class="muted">Выбери фото для анализа.</p></div></div>${IS_DEVELOPMENT ? '<div class="actions" aria-label="Демо-сценарии анализа"><button class="primary-button" type="button" data-food-ai-demo aria-label="Показать демо-результат анализа">Показать анализ</button><button class="ghost-button" type="button" data-food-ai-error aria-label="Показать демо-ошибку анализа">Показать ошибку</button><button class="ghost-button" type="button" data-food-ai-discard>Отмена</button></div>' : ''}</section>`;
+  if (ai.status === 'analysing') return `<section class="card" data-food-ai-panel role="region" aria-labelledby="food-ai-title" aria-live="polite" aria-busy="true"><div class="card-title-row"><div><h2 id="food-ai-title">Анализ блюда…</h2><p class="muted">Подожди немного.</p></div></div></section>`;
+  if (ai.status === 'error') return `<section class="card warning-card" data-food-ai-panel role="alert" aria-labelledby="food-ai-title"><div class="card-title-row"><div><h2 id="food-ai-title">Не удалось распознать блюдо</h2><p>${escapeHTML(ai.error || 'Попробуй ещё раз.')}</p></div></div><button class="ghost-button" type="button" data-food-ai-scan aria-label="Повторить сканирование блюда">Повторить сканирование</button></section>`;
   if (ai.status === 'result' || ai.status === 'saved') {
     const result = ai.result || {};
-    return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>${ai.status === 'saved' ? 'Приём пищи сохранён' : 'Проверь результат'}</h2><p class="muted">Оценка · ${escapeHTML(result.name || 'Блюдо')}</p></div></div>
-      <div class="grid-2"><div><div class="small-stat">${Math.round(foodNumber(result.calories))} ккал</div><span class="muted">на порцию</span></div>${renderFoodMacros(result)}</div>
-      <div class="actions"><button class="ghost-button" type="button" data-food-ai-edit>Изменить</button>${ai.status === 'result' ? `<button class="primary-button" type="button" data-food-ai-save>Сохранить</button>${IS_DEVELOPMENT ? '<button class="ghost-button" type="button" data-food-ai-discard>Отбросить</button>' : ''}` : '<button class="ghost-button" type="button" data-food-ai-scan>Сканировать ещё</button>'}</div></div>`;
+    return `<section class="card" data-food-ai-panel role="region" aria-labelledby="food-ai-title" aria-live="polite"><div class="card-title-row"><div><h2 id="food-ai-title">${ai.status === 'saved' ? 'Приём пищи сохранён' : 'Проверь результат'}</h2><p class="muted">Оценка · ${escapeHTML(result.name || 'Блюдо')}</p></div></div>
+      <div class="grid-2"><div><div class="small-stat" aria-label="Калорийность на порцию">${Math.round(foodNumber(result.calories))} ккал</div><span class="muted">на порцию</span></div>${renderFoodMacros(result)}</div>
+      <div class="actions" aria-label="Действия с результатом"><button class="ghost-button" type="button" data-food-ai-edit aria-label="Изменить результат анализа">Изменить</button>${ai.status === 'result' ? `<button class="primary-button" type="button" data-food-ai-save aria-label="Сохранить блюдо в дневник">Сохранить</button>${IS_DEVELOPMENT ? '<button class="ghost-button" type="button" data-food-ai-discard>Отбросить</button>' : ''}` : '<button class="ghost-button" type="button" data-food-ai-scan aria-label="Сканировать ещё одно блюдо">Сканировать ещё</button>'}</div></section>`;
   }
-  return `<div class="card" data-food-ai-panel><div class="card-title-row"><div><h2>Сканировать блюдо</h2><p class="muted">Быстрая оценка калорий и макросов.</p></div></div><button class="primary-button" type="button" data-food-ai-scan>📷 Сканировать блюдо</button></div>`;
+  return `<section class="card" data-food-ai-panel role="region" aria-labelledby="food-ai-title"><div class="card-title-row"><div><h2 id="food-ai-title">Сканировать блюдо</h2><p class="muted">Быстрая оценка калорий и макросов.</p></div></div><button class="primary-button" type="button" data-food-ai-scan aria-label="Сканировать блюдо с помощью AI">📷 Сканировать блюдо</button></section>`;
 }
 
 function renderFood() {
@@ -1418,9 +1425,9 @@ function renderFood() {
   const nutrition = getFoodNutrition();
   const weightISO = getWeeklyWeightISO(state.selectedDate);
   const weightHealth = getHealth(weightISO);
-  root.innerHTML = `<section class="card"><div class="card-title-row"><div><h1>Питание</h1><p class="muted">Главное за день — энергия и быстрый ввод.</p></div></div><div class="small-stat">${Math.round(nutrition.calories)}${nutrition.calories ? ' <span class="muted">ккал</span>' : ' / 2300 <span class="muted">ккал</span>'}</div>${renderFoodMacros(nutrition)}</section>
+  root.innerHTML = `<section class="card" aria-labelledby="food-summary-title"><div class="card-title-row"><div><h1 id="food-summary-title">Питание</h1><p class="muted">Главное за день — энергия и быстрый ввод.</p></div></div><div class="small-stat" aria-label="Калории за выбранный день">${Math.round(nutrition.calories)}${nutrition.calories ? ' <span class="muted">ккал</span>' : ' / 2300 <span class="muted">ккал</span>'}</div>${renderFoodMacros(nutrition)}</section>
     ${renderFoodAiCard()}
-    <section class="card"><div class="card-title-row"><div><h2>Блюда</h2><p class="muted">${health.meals.length} записей</p></div></div><div class="meal-list">${renderFoodMealPreview()}</div></section>
+    <section class="card" aria-labelledby="food-meals-title"><div class="card-title-row"><div><h2 id="food-meals-title">Блюда</h2><p class="muted">${health.meals.length} записей</p></div></div><div class="meal-list" aria-label="Записи о блюдах">${renderFoodMealPreview()}</div></section>
     ${renderCollapsedBlock('Добавить вручную', renderMealAddForm('food'), '', { key: `food-manual-${state.selectedDate}` })}
     ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
     `;

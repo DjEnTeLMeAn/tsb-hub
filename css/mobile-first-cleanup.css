@@ -223,3 +223,16 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
   }
 }
+
+/* Tasks list screen stays a true compact list on touch layouts. */
+@media(max-width:900px){
+  body #tab-tasks .task-list-screen{gap:10px;}
+  body #tab-tasks .task-list-screen-section{padding:12px;border-radius:16px;}
+  body #tab-tasks .task-list-screen-toolbar .compact-action{width:auto;min-height:38px;padding:0 12px;}
+  body #tab-tasks .task-list-item{height:72px;min-height:68px;max-height:76px;padding:8px 10px;border-radius:12px;}
+  body #tab-tasks .task-list-main{display:flex;grid-template-columns:none;gap:10px;width:auto;}
+  body #tab-tasks .task-list-main>input[type="checkbox"]{width:24px!important;height:24px!important;min-width:24px!important;min-height:24px!important;}
+  body #tab-tasks .task-list-title{line-height:1.2;}
+  body #tab-tasks .task-list-actionsheet{width:calc(100% - 20px);max-width:none;margin:auto;}
+  body #tab-tasks .task-list-actionsheet-panel{padding:16px;border-radius:18px;}
+}

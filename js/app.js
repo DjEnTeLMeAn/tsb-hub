@@ -1220,20 +1220,44 @@ function renderTaskRow(task, iso) {
   const time = task.time || task.dueTime || '';
   const taskText = escapeHTML(task.text);
   const taskId = escapeHTML(task.id);
-  const status = task.done ? 'Выполнено' : task.dismissed ? 'Скрыто' : 'Не выполнено';
-  const priority = task.priority && PRIORITIES[task.priority] ? `<span class="badge ${escapeHTML(task.priority)}">${escapeHTML(PRIORITIES[task.priority])}</span>` : '';
-  return `<article class="task-card task-row ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}">
-    <div class="task-top">
-      <label class="task-main"><input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
-        <span class="task-content"><span class="task-text">${taskText}</span><span class="task-meta" aria-label="Статус и время задачи"><span class="task-status">${status}</span>${time ? `<time class="task-time" datetime="${escapeHTML(time)}">${escapeHTML(time)}</time>` : ''}</span></span></label>
-      <div class="actions">
-        <button class="ghost-button" type="button" data-task-sub="${taskId}" data-date="${escapeHTML(iso)}">Подзадачи</button>
-        <button class="ghost-button" type="button" data-task-edit="${taskId}" data-date="${escapeHTML(iso)}">Изм.</button>
-        <button class="danger-button" type="button" data-task-delete="${taskId}" data-date="${escapeHTML(iso)}">Удал.</button>
-      </div>
-    </div>
-    <div class="badge-row">${priority}</div>
+  return `<article class="task-list-item ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}" data-task-open="${taskId}" data-date="${escapeHTML(iso)}" role="button" tabindex="0" aria-label="Открыть задачу «${taskText}»">
+    <label class="task-list-main">
+      <input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
+      <span class="task-list-copy"><span class="task-list-title">${taskText}</span>${time ? `<span class="task-list-meta"><time datetime="${escapeHTML(time)}">${escapeHTML(time)}</time></span>` : ''}</span>
+    </label>
   </article>`;
+}
+
+function openTaskActionSheet(taskId, iso) {
+  const task = findTask(iso, taskId);
+  if (!task) return;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'task-list-actionsheet';
+  const safeId = escapeHTML(task.id);
+  const safeDate = escapeHTML(iso);
+  const subtaskCount = Array.isArray(task.subtasks) ? task.subtasks.length : 0;
+  dialog.innerHTML = `<div class="task-list-actionsheet-panel">
+    <div class="task-list-actionsheet-header"><div><p class="muted">${escapeHTML(iso === state.selectedDate ? 'Сегодня' : 'Завтра')}</p><h2>${escapeHTML(task.text)}</h2></div><button class="icon-button" type="button" data-task-sheet-close aria-label="Закрыть">×</button></div>
+    ${task.time ? `<p class="task-list-actionsheet-meta">Время: ${escapeHTML(task.time)}</p>` : ''}
+    <div class="task-list-actionsheet-actions">
+      <button class="ghost-button" type="button" data-task-sub="${safeId}" data-date="${safeDate}">Подзадачи${subtaskCount ? ` · ${subtaskCount}` : ''}</button>
+      <button class="ghost-button" type="button" data-task-edit="${safeId}" data-date="${safeDate}">Изменить</button>
+      <button class="danger-button" type="button" data-task-delete="${safeId}" data-date="${safeDate}">Удалить</button>
+    </div>
+  </div>`;
+  document.body.appendChild(dialog);
+  const close = () => { if (dialog.open) dialog.close(); dialog.remove(); };
+  dialog.querySelector('[data-task-sheet-close]').onclick = close;
+  dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) close();
+  });
+  // Close before the existing action handlers open their edit/confirm dialogs.
+  dialog.addEventListener('click', event => {
+    if (event.target.closest('[data-task-edit],[data-task-delete],[data-task-sub]')) close();
+  }, true);
+  bindCommonActions(dialog);
+  dialog.showModal();
 }
 
 function renderTasks() {
@@ -1241,23 +1265,19 @@ function renderTasks() {
   if (!root) return;
   const iso = state.taskPeriod === 'tomorrow' ? addDays(state.selectedDate, 1) : state.selectedDate;
   const allTasks = getTasks(iso).filter(task => !(app.settings.hideDone && (task.done || task.dismissed)));
-  const activeTasks = allTasks.filter(task => !task.done && !task.dismissed);
-  const completedTasks = allTasks.filter(task => task.done || task.dismissed);
-  const monday = getMondayISO(state.selectedDate);
-  const week = Array.from({ length: 7 }, (_, index) => getProgress(addDays(monday, index)));
-  const total = week.reduce((sum, item) => sum + item.total, 0);
-  const done = week.reduce((sum, item) => sum + item.done, 0);
-  const pct = total ? Math.round(done / total * 100) : 0;
   const periodLabel = state.taskPeriod === 'tomorrow' ? 'Завтра' : 'Сегодня';
-  root.innerHTML = `<section class="page-heading"><div><p class="muted">${periodLabel} · ${formatHumanDate(iso)}</p><h1>Задачи</h1><p class="muted">${activeTasks.length ? `${activeTasks.length} активных ${activeTasks.length === 1 ? 'задача' : 'задач'}` : 'Активных задач нет'}</p></div></section>
+  root.innerHTML = `<section class="task-list-screen"><header class="task-list-screen-header"><div><h1>Задачи</h1><p class="muted">${formatHumanDate(iso)}</p></div></header>
     <nav class="segmented-control" aria-label="Период задач"><button type="button" class="${state.taskPeriod === 'today' ? 'active' : ''}" data-task-period="today" aria-current="${state.taskPeriod === 'today' ? 'page' : 'false'}">Сегодня</button><button type="button" class="${state.taskPeriod === 'tomorrow' ? 'active' : ''}" data-task-period="tomorrow" aria-current="${state.taskPeriod === 'tomorrow' ? 'page' : 'false'}">Завтра</button></nav>
-    <section class="section-block"><div class="section-heading"><div><h2>${periodLabel}</h2><p class="muted">Сначала — то, что ещё нужно сделать.</p></div><button class="primary-button compact-action" type="button" data-task-add aria-label="Добавить задачу на ${periodLabel.toLowerCase()}" aria-controls="task-add-form-${state.taskPeriod}" aria-expanded="false">+ Добавить задачу</button></div>
+    <section class="task-list-screen-section"><div class="task-list-screen-toolbar"><button class="primary-button compact-action" type="button" data-task-add aria-label="Добавить задачу на ${periodLabel.toLowerCase()}" aria-controls="task-add-form-${state.taskPeriod}" aria-expanded="false">+ Добавить</button></div>
       <div class="action-disclosure task-quick-add" id="task-add-form-${state.taskPeriod}" data-task-add-form hidden>${renderTaskAddForm(iso, `tasks-${state.taskPeriod}`)}</div>
-      <div class="task-list task-list-clean">${activeTasks.length ? activeTasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state"><strong>На этот день активных задач нет</strong><p class="muted">Добавьте одну небольшую задачу, чтобы начать план.</p></div>'}</div>
-      ${completedTasks.length ? `<details class="collapsible-list today-details task-completed" data-details-key="tasks-completed-${state.taskPeriod}"><summary>Выполненные и скрытые · ${completedTasks.length}</summary><div class="task-list task-list-clean">${completedTasks.map(task => renderTaskRow(task, iso)).join('')}</div></details>` : ''}
-    </section>
-    <section class="section-block weekly-statistics" aria-labelledby="tasks-week-heading"><div class="section-heading"><div><h2 id="tasks-week-heading">Неделя</h2><p class="muted" id="tasks-week-summary">${done ? `Выполнено ${done} из ${total}` : 'Начните с первой задачи'}</p></div><strong aria-hidden="true">${pct}%</strong></div><div class="progress" role="progressbar" aria-label="Выполнено за неделю" aria-describedby="tasks-week-summary" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div></section>`;
+      <div class="task-list-screen-list" aria-label="Список задач">${allTasks.length ? allTasks.map(task => renderTaskRow(task, iso)).join('') : '<div class="empty-state"><strong>На этот день задач нет</strong><p class="muted">Добавьте одну небольшую задачу, чтобы начать план.</p></div>'}</div>
+    </section></section>`;
   root.querySelectorAll('[data-task-period]').forEach(button => button.onclick = () => { state.taskPeriod = button.dataset.taskPeriod; renderTasks(); });
+  root.querySelectorAll('[data-task-open]').forEach(row => {
+    const open = () => openTaskActionSheet(row.dataset.taskOpen, row.dataset.date);
+    row.addEventListener('click', event => { if (!event.target.closest('input,button,a,select,textarea')) open(); });
+    row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } });
+  });
   root.querySelector('[data-task-add]')?.addEventListener('click', event => {
     const formWrap = root.querySelector('[data-task-add-form]');
     if (!formWrap) return;

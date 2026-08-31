@@ -133,7 +133,8 @@ h3 { font-size: 1rem; }
 .task-list-item.done,
 .task-list-item.dismissed { opacity: .58; }
 .task-list-main { display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; cursor: pointer; }
-.task-list-main > input[type="checkbox"] { width: 24px; height: 24px; min-width: 24px; min-height: 24px; margin: 0; accent-color: var(--accent-2); }
+.task-list-state { display: grid; place-items: center; width: 24px; min-width: 24px; height: 24px; border: 1px solid rgba(148,163,184,.4); border-radius: 50%; color: var(--muted); font-size: .85rem; font-weight: 800; }
+.task-list-item.done .task-list-state { color: var(--text); border-color: rgba(148,163,184,.58); background: rgba(148,163,184,.16); }
 .task-list-copy { display: grid; gap: 3px; min-width: 0; }
 .task-list-title { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.25; overflow-wrap: anywhere; }
 .task-list-item.done .task-list-title { text-decoration: line-through; color: var(--muted); }

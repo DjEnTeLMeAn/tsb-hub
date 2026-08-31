@@ -1221,10 +1221,7 @@ function renderTaskRow(task, iso) {
   const taskText = escapeHTML(task.text);
   const taskId = escapeHTML(task.id);
   return `<article class="task-list-item ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}" data-task-open="${taskId}" data-date="${escapeHTML(iso)}" role="button" tabindex="0" aria-label="Открыть задачу «${taskText}»">
-    <label class="task-list-main">
-      <input type="checkbox" data-task-toggle="${taskId}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Отметить задачу «${taskText}»: ${task.done ? 'выполнено' : 'не выполнено'}">
-      <span class="task-list-copy"><span class="task-list-title">${taskText}</span>${note ? `<span class="task-list-meta">${escapeHTML(note)}</span>` : ''}</span>
-    </label>
+    <div class="task-list-main"><span class="task-list-state" aria-hidden="true">${task.done ? '✓' : ''}</span><span class="task-list-copy"><span class="task-list-title">${taskText}</span>${note ? `<span class="task-list-meta">${escapeHTML(note)}</span>` : ''}</span></div>
   </article>`;
 }
 
@@ -2988,7 +2985,6 @@ function bindCommonActions(root = document) {
       getTasks(iso).push({
         id: uid('task'),
         text,
-        priority: 'important',
         time: '',
         done: false,
         failed: false,
@@ -3038,16 +3034,12 @@ function bindCommonActions(root = document) {
         title: 'Изменить задачу',
         fields: [
           { name: 'text', label: 'Текст задачи', value: task.text },
-          { name: 'priority', label: 'Приоритет', type: 'select', value: task.priority, options: [
-            { value: 'critical', label: 'Критично' },
-            { value: 'important', label: 'Важно' },
-            { value: 'secondary', label: 'Второстепенно' }
-          ]}
+          { name: 'note', label: 'Комментарий', value: task.note || '', placeholder: 'Короткая заметка' }
         ]
       });
       if (!result) return;
       task.text = result.text.trim() || task.text;
-      task.priority = normalizePriority(result.priority);
+      task.note = String(result.note || '').trim();
       markChanged();
     };
   });

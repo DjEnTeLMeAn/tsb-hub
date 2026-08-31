@@ -145,6 +145,7 @@ h3 { font-size: 1rem; }
   padding: 0;
   border: 0;
   background: transparent;
+  color: var(--text);
 }
 .task-list-actionsheet::backdrop { background: rgba(0,0,0,.62); }
 .task-list-actionsheet-panel {
@@ -154,14 +155,15 @@ h3 { font-size: 1rem; }
   border: 1px solid var(--line);
   border-radius: 20px;
   background: var(--card);
+  color: var(--text);
   box-shadow: var(--shadow);
 }
 .task-list-actionsheet-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.task-list-actionsheet-header h2 { overflow-wrap: anywhere; }
-.task-list-actionsheet-header .muted,
+.task-list-actionsheet-header h2 { overflow-wrap: anywhere; color: var(--text); }
+.task-list-actionsheet-header .muted { color: var(--muted); font-size: .82rem; }
 .task-list-actionsheet-meta { color: var(--muted); font-size: .82rem; }
 .task-list-actionsheet-actions { display: grid; gap: 8px; }
-.task-list-actionsheet-actions button { width: 100%; min-height: 44px; }
+.task-list-actionsheet-actions button { width: 100%; min-height: 44px; color: inherit; }
 #tab-tasks .page-heading {
   display: flex;
   align-items: end;

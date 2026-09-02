@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const RELEASE='0.13.8-brand-splash-20260831';
+const version=JSON.parse(fs.readFileSync('version.json','utf8'));
+const RELEASE=version.release;
 const app=fs.readFileSync('js/app.js','utf8');
 const index=fs.readFileSync('index.html','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');
@@ -87,7 +88,6 @@ assert.ok(updateManager.includes(`const RELEASE='${RELEASE}'`),'update manager m
 assert.ok(updateManager.includes('service-worker.js?v=')&&updateManager.includes('nativeRegister(swUrl('),'update manager must own service worker registration');
 assert.ok(sw.includes(`const RELEASE='${RELEASE}'`),'service worker release mismatch');
 const manifest=JSON.parse(fs.readFileSync('manifest.json','utf8'));
-const version=JSON.parse(fs.readFileSync('version.json','utf8'));
 assert.equal(manifest.version,RELEASE,'manifest release mismatch');
 assert.equal(version.release,RELEASE,'version.json release mismatch');
 const financeRenderStart=app.indexOf('function renderFinance()');

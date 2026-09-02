@@ -11,6 +11,7 @@ const manifest = JSON.parse(read('manifest.json'));
 const release = version.release;
 const index = read('index.html');
 const app = read('js/app.js');
+const bootstrap = read('js/bootstrap.js');
 const serviceWorker = read('service-worker.js');
 const readme = read('README.md');
 
@@ -19,6 +20,7 @@ const requiredFiles = [
   'css/style.css', 'css/mobile-first-cleanup.css', 'css/mobile-dashboard.css',
   'css/mobile-finance.css', 'css/confirm-dialog.css',
   'js/update-manager.js', 'js/finance-core.js', 'js/app.js',
+  'js/bootstrap.js',
   'js/mobile-first-cleanup.js', 'js/mobile-dashboard.js',
   'icons/icon-192.png', 'icons/icon-512.png'
 ];
@@ -31,7 +33,8 @@ test('release metadata is valid and propagated through the PWA shell', () => {
   assert.equal(manifest.icons.length, 2);
   assert.ok(index.includes(`data-release="${release}"`));
   assert.ok(index.includes(`name="tsb-release" content="${release}"`));
-  assert.ok(index.includes(`window.TSB_RELEASE='${release}'`));
+  assert.ok(bootstrap.includes(`window.TSB_RELEASE='${release}'`));
+  assert.ok(index.includes(`js/bootstrap.js?v=${release}`));
   assert.ok(index.includes(`<title>TSB Hub v${release.split('-')[0]}</title>`));
   assert.ok(serviceWorker.includes(`const RELEASE='${release}'`));
   assert.ok(serviceWorker.includes(`const CACHE_NAME=\`tsb-hub-\${RELEASE}\``));

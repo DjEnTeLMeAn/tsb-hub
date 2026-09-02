@@ -1,4 +1,4 @@
-const RELEASE='0.13.8-brand-splash-20260831';
+const RELEASE='0.13.9-security-hardening-20260831';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,
@@ -8,6 +8,7 @@ const APP_SHELL=[
   `./css/mobile-dashboard.css?v=${RELEASE}`,
   `./css/mobile-finance.css?v=${RELEASE}`,
   `./css/confirm-dialog.css?v=${RELEASE}`,
+  `./js/bootstrap.js?v=${RELEASE}`,
   `./js/update-manager.js?v=${RELEASE}`,
   `./js/finance-core.js?v=${RELEASE}`,
   `./js/storage.js?v=${RELEASE}`,
@@ -44,8 +45,12 @@ self.addEventListener('message',event=>{
   if(type==='TSB_GET_VERSION'&&event.source)event.source.postMessage({type:'TSB_SW_VERSION',release:RELEASE,cacheName:CACHE_NAME});
 });
 self.addEventListener('fetch',event=>{
-  const request=event.request;if(request.method!=='GET')return;
-  const url=new URL(request.url);if(url.origin!==self.location.origin)return;
+  const request=event.request;
+  const url=new URL(request.url);
+  if(url.origin!==self.location.origin)return;
+  const sensitiveRoots=['/api','/auth','/session'];
+  if(sensitiveRoots.some(root=>url.pathname===root||url.pathname.startsWith(`${root}/`)))return;
+  if(request.method!=='GET')return;
   if(url.pathname.endsWith('/version.json')){event.respondWith(fetch(request,{cache:'no-store'}));return}
   if(request.mode==='navigate'){event.respondWith(networkFirst(request,`./index.html?v=${RELEASE}`));return}
   if(/\.(?:js|css|json|html)$/i.test(url.pathname)){event.respondWith(networkFirst(request));return}

@@ -5,6 +5,17 @@ const DEVICE_ID_KEY = 'tsb_hub_device_id';
 const FULL_BACKUP_TYPE = 'full';
 const FINANCE_BACKUP_TYPE = 'finance';
 const BACKUP_FORMAT_VERSION = 1;
+const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
+const MAX_BACKUP_DEPTH = 12;
+const MAX_BACKUP_NODES = 20000;
+const MAX_DATE_BUCKETS = 1000;
+const MAX_TASKS_PER_DAY = 500;
+const MAX_MEALS_PER_DAY = 500;
+const MAX_SUBTASKS_PER_TASK = 100;
+const MAX_IMPORTANT_DATES = 1000;
+const MAX_STRING_LENGTH = 10000;
+const SAFE_ID_RE = /^[A-Za-z0-9_.:-]{1,128}$/;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 const OLD_TSB_KEY = 'tasks_v043';
 const OLD_HEALTH_KEY = 'healthData';
 const OLD_HEALTH_SETTINGS_KEY = 'healthSettings';
@@ -37,7 +48,12 @@ const FINANCE_REASONS = [
 const SESSION_TAB_KEY = 'tsb_hub_active_tab_session';
 const APP_TABS = ['tasks', 'food', 'finance'];
 const APP_SCREENS = [...APP_TABS, 'settings'];
-const IS_DEVELOPMENT = Boolean(window.__TSB_DEBUG__ || new URLSearchParams(window.location.search).has('debug'));
+function isLocalDevelopment(location, debugFlag) {
+  const hostname = String(location?.hostname || '').toLowerCase();
+  return debugFlag === true && ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+}
+
+const IS_DEVELOPMENT = isLocalDevelopment(window.location, window.__TSB_DEBUG__);
 
 function getInitialActiveTab() {
   try {
@@ -115,7 +131,7 @@ function createDefaultData() {
 function getOrCreateDeviceId() {
   let id = TSBStorage.get(DEVICE_ID_KEY);
   if (!id) {
-    id = `device_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    id = uid('device');
     TSBStorage.set(DEVICE_ID_KEY, id);
   }
   return id;
@@ -149,7 +165,7 @@ function loadData() {
 
 function normalizeData(data) {
   const defaults = createDefaultData();
-  data = data || {};
+  data = isPlainObject(data) ? data : {};
   if (!data.meta) data.meta = {};
   const now = new Date().toISOString();
   const migration = TSBFinanceCore.migrateLegacyState({
@@ -171,19 +187,69 @@ function normalizeData(data) {
     if (created.ok) finance = created.finance;
   }
   return {
-    ...defaults,
-    ...data,
-    meta: { ...defaults.meta, ...(data.meta || {}), appVersion: APP_VERSION, dataVersion: 3 },
-    tasks: data.tasks || {},
-    health: data.health || {},
+    meta: normalizeMeta(data.meta, defaults.meta),
+    tasks: normalizeTasks(data.tasks, new Set(), new Set()),
+    health: normalizeHealth(data.health, new Set()),
     dailyReports: normalizeDailyReports(data.dailyReports),
     finance,
     financeContext: normalizeFinanceContext(part2Migration.financeContext),
     gptPlans: normalizeGptPlans(data.gptPlans),
-    importantDates: Array.isArray(data.importantDates) ? data.importantDates : [],
-    settings: { ...defaults.settings, ...(data.settings || {}) },
-    archives: migration.archives || {}
+    importantDates: normalizeImportantDates(data.importantDates, new Set()),
+    settings: normalizeSettings(data.settings, defaults.settings),
+    archives: normalizeArchives(migration.archives)
   };
+}
+
+function normalizeMeta(value, defaults = createDefaultData().meta) {
+  const source = isPlainObject(value) ? value : {};
+  const exactDateTime = candidate => validISODateTime(candidate) ? candidate : '';
+  const deviceId = typeof source.deviceId === 'string' ? source.deviceId.trim() : '';
+  const counter = Number(source.changeCounter);
+  return {
+    appVersion: boundedString(APP_VERSION, 100),
+    dataVersion: 3,
+    createdAt: exactDateTime(source.createdAt) || defaults.createdAt,
+    lastModified: exactDateTime(source.lastModified) || defaults.lastModified,
+    lastExported: exactDateTime(source.lastExported),
+    deviceId: SAFE_ID_RE.test(deviceId) && !FORBIDDEN_KEYS.has(deviceId) ? deviceId : defaults.deviceId,
+    changeCounter: Number.isFinite(counter) ? Math.min(1e9, Math.max(0, Math.floor(counter))) : defaults.changeCounter
+  };
+}
+
+function normalizeArchives(value) {
+  if (!isPlainObject(value) || !Object.prototype.hasOwnProperty.call(value, 'financeV1MigrationBackup')) return {};
+  const source = value.financeV1MigrationBackup;
+  if (!isPlainObject(source) || !validISODateTime(source.createdAt) || !isPlainObject(source.finance) || !isPlainObject(source.financeContext)) return {};
+  let nodes = 0;
+  function boundedClone(node, depth) {
+    if (++nodes > MAX_BACKUP_NODES || depth > MAX_BACKUP_DEPTH) return undefined;
+    if (node === null || typeof node === 'boolean') return node;
+    if (typeof node === 'number') return Number.isFinite(node) && Math.abs(node) <= 1e12 ? node : undefined;
+    if (typeof node === 'string') return boundedString(node, MAX_STRING_LENGTH);
+    if (Array.isArray(node)) {
+      if (node.length > 10000) return undefined;
+      const result = [];
+      for (const item of node) {
+        const cloned = boundedClone(item, depth + 1);
+        if (cloned === undefined) return undefined;
+        result.push(cloned);
+      }
+      return result;
+    }
+    if (!isPlainObject(node) || Object.keys(node).length > 1000) return undefined;
+    const result = Object.create(null);
+    for (const [key, item] of Object.entries(node)) {
+      if (FORBIDDEN_KEYS.has(key) || key.length > 128) return undefined;
+      const cloned = boundedClone(item, depth + 1);
+      if (cloned === undefined) return undefined;
+      result[key] = cloned;
+    }
+    return result;
+  }
+  const finance = boundedClone(source.finance, 0);
+  const financeContext = boundedClone(source.financeContext, 0);
+  if (!isPlainObject(finance) || !isPlainObject(financeContext)) return {};
+  return { financeV1MigrationBackup: { createdAt: source.createdAt, finance, financeContext } };
 }
 
 function saveData(data = app, markModified = true) {
@@ -311,7 +377,22 @@ function normalizeAnyDateKey(value) {
 }
 
 function uid(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  return `${prefix}_${secureRandomUUID()}`;
+}
+
+function secureRandomUUID() {
+  const cryptoObject = typeof globalThis !== 'undefined' && globalThis.crypto
+    ? globalThis.crypto
+    : (typeof window !== 'undefined' ? window.crypto : null);
+  if (typeof cryptoObject?.randomUUID === 'function') return cryptoObject.randomUUID();
+  if (typeof cryptoObject?.getRandomValues !== 'function') throw new Error('Secure randomness is unavailable');
+
+  const bytes = new Uint8Array(16);
+  cryptoObject.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 function toISODate(date) {
@@ -408,17 +489,19 @@ function getHealth(iso = state.selectedDate) {
 }
 
 function normalizeDailyReports(value) {
-  if (!value || typeof value !== 'object') return {};
-  const result = {};
+  if (!isPlainObject(value)) return {};
+  const result = Object.create(null);
+  let buckets = 0;
   Object.entries(value).forEach(([iso, report]) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
-    const source = report && typeof report === 'object' ? report : {};
+    if (buckets >= MAX_DATE_BUCKETS || !validISODateKey(iso) || !isPlainObject(report)) return;
+    const source = report;
     result[iso] = {
       selfScore: clampScore(source.selfScore),
       driveScore: clampScore(source.driveScore),
-      text: String(source.text || source.note || '').trim(),
-      updatedAt: source.updatedAt || source.createdAt || ''
+      text: boundedString(source.text ?? source.note, 5000),
+      updatedAt: boundedString(source.updatedAt ?? source.createdAt, 100)
     };
+    buckets += 1;
   });
   return result;
 }
@@ -453,40 +536,60 @@ function normalizeFinance(value) {
   return TSBFinanceCore.normalizeFinance(value);
 }
 
+function normalizeSettings(value, defaults = createDefaultData().settings) {
+  const source = isPlainObject(value) ? value : {};
+  return {
+    hideDone: typeof source.hideDone === 'boolean' ? source.hideDone : defaults.hideDone,
+    showSelectedDayOnly: typeof source.showSelectedDayOnly === 'boolean' ? source.showSelectedDayOnly : defaults.showSelectedDayOnly,
+    showOverdueOnToday: typeof source.showOverdueOnToday === 'boolean' ? source.showOverdueOnToday : defaults.showOverdueOnToday,
+    pastTasksWindowDays: Number.isInteger(source.pastTasksWindowDays) && source.pastTasksWindowDays >= 0 && source.pastTasksWindowDays <= 365 ? source.pastTasksWindowDays : defaults.pastTasksWindowDays,
+    theme: ['dark', 'light'].includes(source.theme) ? source.theme : defaults.theme,
+    migratedFromOldStorage: typeof source.migratedFromOldStorage === 'boolean' ? source.migratedFromOldStorage : defaults.migratedFromOldStorage
+  };
+}
+
 
 function normalizeFinanceContext(value) {
   const defaults = createDefaultData().financeContext;
-  const source = value && typeof value === 'object' ? value : {};
+  const source = isPlainObject(value) ? value : {};
+  const incomeIds = new Set();
+  const obligationIds = new Set();
+  const operationIds = new Set();
+  const contextMoney = (value, normalizer) => {
+    if (typeof value !== 'string' && typeof value !== 'number') return '';
+    if (String(value).length > 100) return '';
+    return normalizer(value);
+  };
+  const contextString = (value, limit) => typeof value === 'string' ? boundedString(value, limit) : '';
   const normalizeStatus = (status, doneStatus) => [doneStatus, 'planned'].includes(status) ? status : 'planned';
-  const normalizePlanItem = (item, prefix, doneStatus) => ({
-    id: item?.id || uid(prefix),
-    amount: normalizeMoneyInput(item?.amount || item?.sum || ''),
-    date: /^\d{4}-\d{2}-\d{2}$/.test(item?.date || '') ? item.date : '',
-    title: String(item?.title || item?.source || item?.category || '').trim(),
-    comment: String(item?.comment || '').trim(),
+  const normalizePlanItem = (item, prefix, doneStatus, ids) => ({
+    id: safeEntityId(item?.id, prefix, ids),
+    amount: contextMoney(item?.amount || item?.sum || '', normalizeMoneyInput),
+    date: validISODateKey(item?.date) ? item.date : '',
+    title: contextString(item?.title ?? item?.source ?? item?.category, 1000),
+    comment: contextString(item?.comment, 3000),
     status: normalizeStatus(item?.status, doneStatus),
-    completedAt: item?.completedAt || item?.receivedAt || item?.paidAt || '',
-    createdAt: item?.createdAt || new Date().toISOString()
+    completedAt: contextString(item?.completedAt ?? item?.receivedAt ?? item?.paidAt, 100),
+    createdAt: contextString(item?.createdAt, 100)
   });
   const normalizeOperation = (item) => ({
-    id: item?.id || uid('op'),
+    id: safeEntityId(item?.id, 'op', operationIds),
     type: ['expense', 'income', 'obligation', 'adjustment'].includes(item?.type) ? item.type : 'adjustment',
-    amount: normalizeSignedMoneyInput(item?.amount || ''),
-    date: /^\d{4}-\d{2}-\d{2}$/.test(item?.date || '') ? item.date : toISODate(new Date()),
-    title: String(item?.title || '').trim(),
-    comment: String(item?.comment || '').trim(),
-    sourceId: String(item?.sourceId || '').trim(),
-    createdAt: item?.createdAt || new Date().toISOString()
+    amount: contextMoney(item?.amount || '', normalizeSignedMoneyInput),
+    date: validISODateKey(item?.date) ? item.date : toISODate(new Date()),
+    title: contextString(item?.title, 1000),
+    comment: contextString(item?.comment, 3000),
+    sourceId: contextString(item?.sourceId, 128),
+    createdAt: contextString(item?.createdAt, 100)
   });
   return {
-    ...defaults,
-    ...source,
-    availableBalance: normalizeSignedMoneyInput(source.availableBalance || source.balance || ''),
-    reserveBalance: normalizeMoneyInput(source.reserveBalance || source.assetsBalance || ''),
-    savingGoal: String(source.savingGoal || '').trim(),
-    incomes: Array.isArray(source.incomes) ? source.incomes.map(item => normalizePlanItem(item, 'inc', 'received')).filter(item => item.amount || item.title || item.date) : [],
-    obligations: Array.isArray(source.obligations) ? source.obligations.map(item => normalizePlanItem(item, 'obl', 'paid')).filter(item => item.amount || item.title || item.date) : [],
-    operations: Array.isArray(source.operations) ? source.operations.map(normalizeOperation).filter(item => item.amount || item.title || item.comment) : []
+    availableBalance: contextMoney(source.availableBalance || source.balance || '', normalizeSignedMoneyInput),
+    reserveBalance: contextMoney(source.reserveBalance || source.assetsBalance || '', normalizeMoneyInput),
+    savingGoal: contextString(source.savingGoal, 1000),
+    incomes: Array.isArray(source.incomes) ? source.incomes.slice(0, 1000).filter(isPlainObject).map(item => normalizePlanItem(item, 'inc', 'received', incomeIds)).filter(item => item.amount || item.title || item.date) : [],
+    obligations: Array.isArray(source.obligations) ? source.obligations.slice(0, 1000).filter(isPlainObject).map(item => normalizePlanItem(item, 'obl', 'paid', obligationIds)).filter(item => item.amount || item.title || item.date) : [],
+    operations: Array.isArray(source.operations) ? source.operations.slice(0, 2000).filter(isPlainObject).map(normalizeOperation).filter(item => item.amount || item.title || item.comment) : [],
+    financeV2Legacy: typeof source.financeV2Legacy === 'boolean' ? source.financeV2Legacy : defaults.financeV2Legacy
   };
 }
 
@@ -538,16 +641,18 @@ function getNextIncome() {
 
 
 function normalizeGptPlans(value) {
-  if (!value || typeof value !== 'object') return {};
-  const result = {};
+  if (!isPlainObject(value)) return {};
+  const result = Object.create(null);
+  let buckets = 0;
   Object.entries(value).forEach(([week, plan]) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) return;
-    const source = plan && typeof plan === 'object' ? plan : { text: String(plan || '') };
+    if (buckets >= MAX_DATE_BUCKETS || !validISODateKey(week) || !isPlainObject(plan)) return;
+    const source = plan;
     result[week] = {
-      text: String(source.text || '').trim(),
-      createdAt: source.createdAt || new Date().toISOString(),
-      updatedAt: source.updatedAt || source.createdAt || new Date().toISOString()
+      text: boundedString(source.text, 10000),
+      createdAt: boundedString(source.createdAt, 100),
+      updatedAt: boundedString(source.updatedAt ?? source.createdAt, 100)
     };
+    buckets += 1;
   });
   return result;
 }
@@ -1088,6 +1193,195 @@ function setTab(tab) {
   if (tabChanged) requestAnimationFrame(() => window.scrollTo(0, 0));
 }
 
+function isPlainObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function boundedString(value, limit = MAX_STRING_LENGTH) {
+  return String(value ?? '').slice(0, limit).trim();
+}
+
+function validISODateKey(value) {
+  const iso = String(value ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+  const date = fromISODate(iso);
+  return !Number.isNaN(date.getTime()) && toISODate(date) === iso;
+}
+
+function validISODateTime(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false;
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime()) && date.toISOString() === value;
+}
+
+function safeEntityId(value, prefix, seen) {
+  const candidate = typeof value === 'string' ? value.trim() : '';
+  if (!FORBIDDEN_KEYS.has(candidate) && SAFE_ID_RE.test(candidate) && !seen.has(candidate)) {
+    seen.add(candidate);
+    return candidate;
+  }
+  let generated = uid(prefix);
+  if (FORBIDDEN_KEYS.has(generated) || !SAFE_ID_RE.test(generated) || seen.has(generated)) {
+    let suffix = seen.size + 1;
+    do generated = `${prefix}_${suffix++}`; while (seen.has(generated));
+  }
+  seen.add(generated);
+  return generated;
+}
+
+function normalizeSubtasks(value, seen = new Set()) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_SUBTASKS_PER_TASK).filter(isPlainObject).map(sub => ({
+    id: safeEntityId(sub.id, 'sub', seen),
+    text: boundedString(sub.text, 1000),
+    done: Boolean(sub.done)
+  })).filter(sub => sub.text);
+}
+
+function normalizeTasks(value, taskIds = new Set(), subtaskIds = new Set()) {
+  if (!isPlainObject(value)) return {};
+  const result = Object.create(null);
+  let buckets = 0;
+  Object.entries(value).forEach(([rawDate, list]) => {
+    if (buckets >= MAX_DATE_BUCKETS || !validISODateKey(rawDate) || !Array.isArray(list)) return;
+    result[rawDate] = list.slice(0, MAX_TASKS_PER_DAY).filter(isPlainObject).map(task => ({
+      id: safeEntityId(task.id, 'task', taskIds),
+      text: boundedString(task.text, 2000),
+      priority: normalizePriority(task.priority),
+      done: Boolean(task.done), failed: Boolean(task.failed), dismissed: Boolean(task.dismissed),
+      subtasks: normalizeSubtasks(task.subtasks, subtaskIds),
+      note: boundedString(task.note, 2000),
+      createdAt: boundedString(task.createdAt, 100),
+      source: boundedString(task.source, 200)
+    }));
+    buckets += 1;
+  });
+  return result;
+}
+
+function normalizeHealth(value, mealIds = new Set()) {
+  if (!isPlainObject(value)) return {};
+  const result = Object.create(null);
+  Object.entries(value).slice(0, MAX_DATE_BUCKETS).forEach(([iso, day]) => {
+    if (!validISODateKey(iso) || !isPlainObject(day)) return;
+    const meals = Array.isArray(day.meals) ? day.meals.slice(0, MAX_MEALS_PER_DAY).filter(isPlainObject).map(meal => ({
+      id: safeEntityId(meal.id, 'meal', mealIds), type: boundedString(meal.type, 100),
+      name: boundedString(meal.name, 1000), amount: boundedString(meal.amount, 1000),
+      time: boundedString(meal.time, 20), comment: boundedString(meal.comment, 3000),
+      calories: Number.isFinite(Number(meal.calories)) ? Number(meal.calories) : 0,
+      protein: Number.isFinite(Number(meal.protein)) ? Number(meal.protein) : 0,
+      fat: Number.isFinite(Number(meal.fat)) ? Number(meal.fat) : 0,
+      carbs: Number.isFinite(Number(meal.carbs)) ? Number(meal.carbs) : 0,
+      createdAt: boundedString(meal.createdAt, 100)
+    })) : [];
+    result[iso] = { meals, weight: boundedString(day.weight, 50), activityNote: boundedString(day.activityNote, 3000), note: boundedString(day.note, 3000) };
+  });
+  return result;
+}
+
+function normalizeImportantDates(value, ids = new Set()) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, MAX_IMPORTANT_DATES).filter(isPlainObject).map(item => ({
+    id: safeEntityId(item.id, 'imp', ids), title: boundedString(item.title, 1000),
+    date: validISODateKey(item.date) ? item.date : '', description: boundedString(item.description, 5000),
+    status: ['active', 'done', 'cancelled'].includes(item.status) ? item.status : 'active',
+    createdAt: boundedString(item.createdAt, 100), source: boundedString(item.source, 200)
+  })).filter(item => item.title && item.date);
+}
+
+function validateFullBackup(value) {
+  const fail = reason => ({ ok: false, reason });
+  if (!isPlainObject(value) || value.backupType !== FULL_BACKUP_TYPE || value.formatVersion !== BACKUP_FORMAT_VERSION) return fail('Неподдерживаемый формат backup');
+  let nodes = 0;
+  const allowedTop = new Set(['backupType', 'formatVersion', 'meta', 'tasks', 'health', 'dailyReports', 'finance', 'financeContext', 'gptPlans', 'importantDates', 'settings', 'archives']);
+  const keysOK = (x, keys) => isPlainObject(x) && Object.keys(x).every(key => keys.has(key) && !FORBIDDEN_KEYS.has(key));
+  const str = (x, key, max) => x[key] === undefined || (typeof x[key] === 'string' && x[key].length <= max);
+  const bool = (x, key) => x[key] === undefined || typeof x[key] === 'boolean';
+  const finite = (x, key, max = 1e12) => x[key] === undefined || (typeof x[key] === 'number' && Number.isFinite(x[key]) && Math.abs(x[key]) <= max);
+  const dateTime = value => typeof value === 'string' && value.length <= 100 && (!value || /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) && new Date(value).toISOString() === value);
+  const safeId = value => typeof value === 'string' && !FORBIDDEN_KEYS.has(value) && SAFE_ID_RE.test(value);
+  const ref = (x, key) => x[key] === undefined || x[key] === null || (typeof x[key] === 'string' && (x[key] === '' || safeId(x[key])));
+  const unique = (items, field = 'id') => { const seen = new Set(); for (const item of items) { if (item[field] !== undefined) { if (!safeId(item[field]) || seen.has(item[field])) return false; seen.add(item[field]); } } return true; };
+  function walk(node, depth) {
+    if (++nodes > MAX_BACKUP_NODES || depth > MAX_BACKUP_DEPTH) return false;
+    if (Array.isArray(node)) return node.length <= MAX_BACKUP_NODES && node.every(item => walk(item, depth + 1));
+    if (!isPlainObject(node)) return true;
+    return Object.entries(node).every(([key, child]) => !FORBIDDEN_KEYS.has(key) && walk(child, depth + 1));
+  }
+  if (!Object.keys(value).every(key => allowedTop.has(key)) || !walk(value, 0)) return fail('Backup слишком большой, глубокий или содержит запрещённые данные');
+
+  const subKeys = new Set(['id', 'text', 'done']);
+  const taskKeys = new Set(['id', 'text', 'priority', 'done', 'failed', 'dismissed', 'subtasks', 'note', 'createdAt', 'source']);
+  const validSub = x => keysOK(x, subKeys) && (x.id === undefined || safeId(x.id)) && str(x, 'text', 1000) && bool(x, 'done');
+  const validTask = x => keysOK(x, taskKeys) && (x.id === undefined || safeId(x.id)) && str(x, 'text', 2000) && str(x, 'note', 2000) && str(x, 'source', 200) && dateTime(x.createdAt) && bool(x, 'done') && bool(x, 'failed') && bool(x, 'dismissed') && (!x.priority || ['critical', 'important', 'secondary'].includes(x.priority)) && (!x.subtasks || (Array.isArray(x.subtasks) && x.subtasks.length <= MAX_SUBTASKS_PER_TASK && x.subtasks.every(validSub) && unique(x.subtasks)));
+  const validateBuckets = (section, maxItems, validator) => isPlainObject(section) && Object.keys(section).length <= MAX_DATE_BUCKETS && Object.entries(section).every(([date, items]) => validISODateKey(date) && Array.isArray(items) && items.length <= maxItems && items.every(validator) && unique(items));
+  if (value.tasks !== undefined && !validateBuckets(value.tasks, MAX_TASKS_PER_DAY, validTask)) return fail('Некорректный раздел tasks');
+
+  const mealKeys = new Set(['id', 'type', 'name', 'amount', 'time', 'comment', 'calories', 'protein', 'fat', 'carbs', 'createdAt']);
+  const validMeal = x => keysOK(x, mealKeys) && (x.id === undefined || safeId(x.id)) && str(x, 'type', 100) && str(x, 'name', 1000) && str(x, 'amount', 1000) && str(x, 'time', 20) && str(x, 'comment', 3000) && dateTime(x.createdAt) && ['calories', 'protein', 'fat', 'carbs'].every(key => finite(x, key));
+  const dayKeys = new Set(['meals', 'weight', 'activityNote', 'note']);
+  if (value.health !== undefined && (!isPlainObject(value.health) || Object.keys(value.health).length > MAX_DATE_BUCKETS || !Object.entries(value.health).every(([date, day]) => validISODateKey(date) && keysOK(day, dayKeys) && Array.isArray(day.meals) && day.meals.length <= MAX_MEALS_PER_DAY && day.meals.every(validMeal) && unique(day.meals) && str(day, 'weight', 50) && str(day, 'activityNote', 3000) && str(day, 'note', 3000)))) return fail('Некорректный раздел health');
+
+  const reportKeys = new Set(['selfScore', 'driveScore', 'text', 'updatedAt']);
+  const score = x => x === undefined || (typeof x === 'string' && ['', '0', '25', '50', '75', '100'].includes(x));
+  if (value.dailyReports !== undefined && (!isPlainObject(value.dailyReports) || Object.keys(value.dailyReports).length > MAX_DATE_BUCKETS || !Object.entries(value.dailyReports).every(([date, x]) => validISODateKey(date) && keysOK(x, reportKeys) && score(x.selfScore) && score(x.driveScore) && str(x, 'text', 5000) && dateTime(x.updatedAt)))) return fail('Некорректный раздел dailyReports');
+  const planKeys = new Set(['text', 'createdAt', 'updatedAt']);
+  if (value.gptPlans !== undefined && (!isPlainObject(value.gptPlans) || Object.keys(value.gptPlans).length > MAX_DATE_BUCKETS || !Object.entries(value.gptPlans).every(([date, x]) => validISODateKey(date) && keysOK(x, planKeys) && str(x, 'text', 10000) && dateTime(x.createdAt) && dateTime(x.updatedAt)))) return fail('Некорректный раздел gptPlans');
+  const importantKeys = new Set(['id', 'title', 'date', 'description', 'status', 'createdAt', 'source']);
+  if (value.importantDates !== undefined && (!Array.isArray(value.importantDates) || value.importantDates.length > MAX_IMPORTANT_DATES || !value.importantDates.every(x => keysOK(x, importantKeys) && (x.id === undefined || safeId(x.id)) && str(x, 'title', 1000) && validISODateKey(x.date) && str(x, 'description', 5000) && ['active', 'done', 'cancelled'].includes(x.status) && dateTime(x.createdAt) && str(x, 'source', 200)) || !unique(value.importantDates))) return fail('Некорректный раздел importantDates');
+
+  const metaKeys = new Set(['appVersion', 'dataVersion', 'createdAt', 'lastModified', 'lastExported', 'deviceId', 'changeCounter']);
+  if (value.meta !== undefined && (!keysOK(value.meta, metaKeys) || !str(value.meta, 'appVersion', 100) || !finite(value.meta, 'dataVersion', 100) || !finite(value.meta, 'changeCounter', 1e9) || !dateTime(value.meta.createdAt) || !dateTime(value.meta.lastModified) || !dateTime(value.meta.lastExported) || (value.meta.deviceId !== undefined && !safeId(value.meta.deviceId)))) return fail('Некорректный раздел meta');
+  const settingsKeys = new Set(['hideDone', 'showSelectedDayOnly', 'showOverdueOnToday', 'pastTasksWindowDays', 'theme', 'migratedFromOldStorage']);
+  if (value.settings !== undefined && (!keysOK(value.settings, settingsKeys) || !['hideDone', 'showSelectedDayOnly', 'showOverdueOnToday', 'migratedFromOldStorage'].every(key => bool(value.settings, key)) || (value.settings.pastTasksWindowDays !== undefined && (!Number.isInteger(value.settings.pastTasksWindowDays) || value.settings.pastTasksWindowDays < 0 || value.settings.pastTasksWindowDays > 365)) || (value.settings.theme !== undefined && !['dark', 'light'].includes(value.settings.theme)))) return fail('Некорректный раздел settings');
+
+  const financeKeys = new Set(['schemaVersion', 'migration', 'accounts', 'transactions', 'categories', 'incomeTypes', 'reserves', 'obligations']);
+  const accountKeys = new Set(['id', 'name', 'type', 'active', 'archived', 'isDefault', 'sortOrder', 'createdAt', 'updatedAt']);
+  const namedKeys = new Set(['id', 'name', 'active', 'archived', 'system', 'sortOrder', 'createdAt', 'updatedAt']);
+  const txnKeys = new Set(['id', 'type', 'amount', 'date', 'time', 'description', 'createdAt', 'updatedAt', 'accountId', 'categoryId', 'incomeTypeId', 'fromAccountId', 'toAccountId', 'systemKind']);
+  const reserveKeys = new Set(['id', 'name', 'amount', 'targetAmount', 'active', 'archived', 'createdAt', 'updatedAt', 'sortOrder']);
+  const obligationKeys = new Set(['id', 'name', 'amount', 'dueDate', 'recurrence', 'status', 'note', 'linkedTransactionId', 'recurrenceParentId', 'nextObligationId', 'createdAt', 'updatedAt']);
+  const migrationKeys = new Set(['checkpoint', 'completedAt', 'part2Checkpoint', 'part2CompletedAt', 'legacyReserveStatus', 'legacyReserveAmount', 'legacyReserveBalanceStatus', 'legacyReserveBalanceTransactionId', 'legacyReserveBalanceRestoredAt', 'legacyObligationsMigrated', 'legacyObligationsSkipped']);
+  const validMigration = x => keysOK(x, migrationKeys) && str(x, 'checkpoint', 100) && dateTime(x.completedAt) && str(x, 'part2Checkpoint', 100) && dateTime(x.part2CompletedAt) && str(x, 'legacyReserveStatus', 100) && finite(x, 'legacyReserveAmount') && str(x, 'legacyReserveBalanceStatus', 100) && ref(x, 'legacyReserveBalanceTransactionId') && dateTime(x.legacyReserveBalanceRestoredAt) && finite(x, 'legacyObligationsMigrated', 1e6) && finite(x, 'legacyObligationsSkipped', 1e6);
+  const validCommon = (x, keys) => keysOK(x, keys) && safeId(x.id) && str(x, 'name', 10000) && bool(x, 'active') && bool(x, 'archived') && finite(x, 'sortOrder', 1e9) && dateTime(x.createdAt) && dateTime(x.updatedAt);
+  const validFinance = f => keysOK(f, financeKeys) && f.schemaVersion === 3 && validMigration(f.migration) && Array.isArray(f.accounts) && f.accounts.length <= 1000 && f.accounts.every(x => validCommon(x, accountKeys) && str(x, 'type', 100) && bool(x, 'isDefault')) && unique(f.accounts) && Array.isArray(f.categories) && f.categories.length <= 1000 && f.categories.every(x => validCommon(x, namedKeys) && bool(x, 'system')) && unique(f.categories) && Array.isArray(f.incomeTypes) && f.incomeTypes.length <= 1000 && f.incomeTypes.every(x => validCommon(x, namedKeys) && bool(x, 'system')) && unique(f.incomeTypes) && Array.isArray(f.transactions) && f.transactions.length <= 10000 && f.transactions.every(x => keysOK(x, txnKeys) && safeId(x.id) && ['EXPENSE', 'INCOME', 'TRANSFER', 'ADJUSTMENT'].includes(x.type) && finite(x, 'amount') && validISODateKey(x.date) && str(x, 'time', 5) && str(x, 'description', 10000) && dateTime(x.createdAt) && dateTime(x.updatedAt) && ['accountId', 'categoryId', 'incomeTypeId', 'fromAccountId', 'toAccountId'].every(key => ref(x, key))) && unique(f.transactions) && Array.isArray(f.reserves) && f.reserves.length <= 5000 && f.reserves.every(x => validCommon(x, reserveKeys) && finite(x, 'amount') && finite(x, 'targetAmount') && str(x, 'name', 10000)) && unique(f.reserves) && Array.isArray(f.obligations) && f.obligations.length <= 5000 && f.obligations.every(x => validCommon(x, obligationKeys) && finite(x, 'amount') && validISODateKey(x.dueDate) && ['NONE', 'MONTHLY'].includes(x.recurrence) && ['ACTIVE', 'PAID', 'CANCELLED'].includes(x.status) && str(x, 'note', 10000) && ref(x, 'linkedTransactionId') && ref(x, 'recurrenceParentId') && ref(x, 'nextObligationId')) && unique(f.obligations);
+  if (value.finance !== undefined && !validFinance(value.finance)) return fail('Некорректный раздел finance');
+
+  const contextKeys = new Set(['availableBalance', 'reserveBalance', 'savingGoal', 'incomes', 'obligations', 'operations', 'financeV2Legacy']);
+  const planKeys2 = new Set(['id', 'amount', 'date', 'title', 'comment', 'status', 'completedAt', 'createdAt']);
+  const opKeys = new Set(['id', 'type', 'amount', 'date', 'title', 'comment', 'sourceId', 'createdAt']);
+  const validPlan = x => keysOK(x, planKeys2) && safeId(x.id) && str(x, 'amount', 100) && (!x.date || validISODateKey(x.date)) && str(x, 'title', 1000) && str(x, 'comment', 3000) && ['planned', 'received', 'paid'].includes(x.status) && str(x, 'completedAt', 100) && dateTime(x.createdAt);
+  const validOp = x => keysOK(x, opKeys) && safeId(x.id) && ['expense', 'income', 'obligation', 'adjustment'].includes(x.type) && str(x, 'amount', 100) && validISODateKey(x.date) && str(x, 'title', 1000) && str(x, 'comment', 3000) && str(x, 'sourceId', 128) && dateTime(x.createdAt);
+  if (value.financeContext !== undefined && (!keysOK(value.financeContext, contextKeys) || !str(value.financeContext, 'availableBalance', 100) || !str(value.financeContext, 'reserveBalance', 100) || !str(value.financeContext, 'savingGoal', 1000) || !bool(value.financeContext, 'financeV2Legacy') || !Array.isArray(value.financeContext.incomes) || value.financeContext.incomes.length > 1000 || !value.financeContext.incomes.every(validPlan) || !unique(value.financeContext.incomes) || !Array.isArray(value.financeContext.obligations) || value.financeContext.obligations.length > 1000 || !value.financeContext.obligations.every(validPlan) || !unique(value.financeContext.obligations) || !Array.isArray(value.financeContext.operations) || value.financeContext.operations.length > 2000 || !value.financeContext.operations.every(validOp) || !unique(value.financeContext.operations))) return fail('Некорректный раздел financeContext');
+
+  const legacyExpenseKeys = new Set(['id', 'amount', 'sum', 'category', 'detail', 'comment', 'date', 'time', 'createdAt', 'updatedAt', 'completedAt']);
+  const validLegacyFinance = x => isPlainObject(x) &&
+    Object.keys(x).length <= MAX_DATE_BUCKETS &&
+    Object.entries(x).every(([date, day]) =>
+      validISODateKey(date) &&
+      keysOK(day, new Set(['expenses', 'noExpenses'])) &&
+      Array.isArray(day.expenses) &&
+      day.expenses.length <= MAX_TASKS_PER_DAY &&
+      day.expenses.every(item =>
+        keysOK(item, legacyExpenseKeys) &&
+        (item.id === undefined || safeId(item.id)) &&
+        finite(item, 'amount') && str(item, 'sum', 100) &&
+        str(item, 'category', 100) && str(item, 'detail', 10000) &&
+        str(item, 'comment', 10000) && str(item, 'time', 5) &&
+        dateTime(item.createdAt) && dateTime(item.updatedAt) && dateTime(item.completedAt)
+      )
+    );
+  const archiveKeys = new Set(['financeV1MigrationBackup']);
+  const backupKeys = new Set(['createdAt', 'finance', 'financeContext']);
+  const validLegacyItem = item => isPlainObject(item) && Object.keys(item).length <= 20 && Object.entries(item).every(([key, entry]) => !FORBIDDEN_KEYS.has(key) && key.length <= 128 && (entry === null || typeof entry === 'boolean' || (typeof entry === 'string' && entry.length <= MAX_STRING_LENGTH) || (typeof entry === 'number' && Number.isFinite(entry) && Math.abs(entry) <= 1e12)));
+  const validLegacyList = (x, key, max) => x[key] === undefined || (Array.isArray(x[key]) && x[key].length <= max && x[key].every(validLegacyItem));
+  const validLegacyContext = x => keysOK(x, contextKeys) && str(x, 'availableBalance', 100) && str(x, 'reserveBalance', 100) && str(x, 'savingGoal', 1000) && bool(x, 'financeV2Legacy') && validLegacyList(x, 'incomes', 1000) && validLegacyList(x, 'obligations', 1000) && validLegacyList(x, 'operations', 2000);
+  if (value.archives !== undefined && (!keysOK(value.archives, archiveKeys) || (value.archives.financeV1MigrationBackup !== undefined && (!keysOK(value.archives.financeV1MigrationBackup, backupKeys) || !dateTime(value.archives.financeV1MigrationBackup.createdAt) || !(validFinance(value.archives.financeV1MigrationBackup.finance) || validLegacyFinance(value.archives.financeV1MigrationBackup.finance)) || !validLegacyContext(value.archives.financeV1MigrationBackup.financeContext))))) return fail('Некорректный раздел archives');
+  return { ok: true };
+}
+
 function renderAll() {
   applyActiveTabToDom();
   const selectedDateLabel = $('#selectedDateLabel');
@@ -1143,7 +1437,7 @@ function renderCalendar(root) {
   for (let d = 1; d <= lastDay.getDate(); d += 1) {
     const iso = toISODate(new Date(year, month, d));
     const hasData = (app.tasks[iso]?.length || 0) > 0 || (app.health[iso]?.meals?.length || 0) > 0 || app.health[iso]?.weight || hasDailyReport(iso) || (app.finance?.[iso]?.expenses?.length || 0) > 0 || Boolean(app.finance?.[iso]?.noExpenses);
-    cells += `<button class="calendar-cell day ${iso === state.selectedDate ? 'selected' : ''} ${iso === todayISO ? 'today' : ''} ${hasData ? 'has-data' : ''}" data-date="${iso}">${d}</button>`;
+    cells += `<button class="calendar-cell day ${iso === state.selectedDate ? 'selected' : ''} ${iso === todayISO ? 'today' : ''} ${hasData ? 'has-data' : ''}" data-date="${escapeHTML(iso)}">${d}</button>`;
   }
 
   root.innerHTML = `
@@ -1377,7 +1671,7 @@ function renderPlans() {
     const hasTasks = getTasks(iso).length > 0;
     const detailsKey = `plans-${iso}`;
     const openAttr = state.expandedSections[detailsKey] ? ' open' : '';
-    const tasksBlock = `<details class="collapsible-list day-task-details" data-details-key="${detailsKey}"${openAttr}>
+    const tasksBlock = `<details class="collapsible-list day-task-details" data-details-key="${escapeHTML(detailsKey)}"${openAttr}>
           <summary>${WEEKDAY_SHORT[i]} · ${shortDate(iso)} · задачи ${progress.done}/${progress.total}${hasTasks ? '' : ' · пусто'}</summary>
           <div class="task-list">${taskList}</div>
         </details>`;
@@ -1484,7 +1778,7 @@ function renderFood() {
     ${renderFoodAiCard()}
     <section class="card" aria-labelledby="food-meals-title"><div class="card-title-row"><div><h2 id="food-meals-title">Блюда</h2><p class="muted">${health.meals.length} записей</p></div></div><div class="meal-list" aria-label="Записи о блюдах">${renderFoodMealPreview()}</div></section>
     ${renderCollapsedBlock('Добавить вручную', renderMealAddForm('food'), '', { key: `food-manual-${state.selectedDate}` })}
-    ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${weightISO}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
+    ${renderCollapsedBlock('Вес и заметка дня', `<div class="grid-2"><form class="form-grid weight weekly-weight-form" data-weight-form data-weight-date="${escapeHTML(weightISO)}"><label>Вес, кг<input name="weight" type="text" inputmode="decimal" placeholder="Напр. 82.4" value="${escapeHTML(weightHealth.weight || '')}"></label><button class="primary-button" type="submit">Сохранить вес недели</button></form><form data-day-note-form class="sync-box day-note-form"><textarea name="note" placeholder="Заметка дня">${escapeHTML(health.note || health.activityNote || '')}</textarea><button class="primary-button" type="submit">Сохранить заметку</button></form></div>`, '', { key: `food-details-${state.selectedDate}` })}
     `;
   bindCommonActions(root);
   $('[data-food-ai-scan]', root)?.addEventListener('click', () => { getFoodAiState().status = 'selecting'; renderFood(); });
@@ -1757,7 +2051,9 @@ function downloadFinanceFile(filename,textValue,type='application/json;charset=u
   const blob=new Blob([textValue],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),0);
 }
 function financeCsvCell(value) {
-  const text=String(value??'');return /[";,\n\r]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
+  let text=String(value??'');
+  if (/^[ \t]*[=+\-@]/.test(text)) text=`'${text}`;
+  return /[";,\n\r]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;
 }
 function financeTransactionExportRow(transaction) {
   const finance=getFinanceStateV2();const account=finance.accounts.find(x=>x.id===transaction.accountId);const from=finance.accounts.find(x=>x.id===transaction.fromAccountId);const to=finance.accounts.find(x=>x.id===transaction.toAccountId);
@@ -2250,13 +2546,11 @@ function renderImportant() {
   bindCommonActions(root);
 }
 
-function renderSync() {
-  const root = $('#tab-sync');
-  if (!root) return;
+function renderDataManagementHTML() {
   const safeMeta = app.meta || {};
-  root.innerHTML = `
+  return `
     <section class="card">
-      <div class="card-title-row"><h2>Синхронизация</h2></div>
+      <div class="card-title-row"><h2>Управление данными</h2></div>
       <p class="notice">Экспорт/импорт общего JSON-файла. Финансы теперь входят в общий файл вместе с задачами и питанием.</p>
       <div class="grid-2" style="margin-top:12px">
         <div class="stat-card"><div class="muted">Последнее изменение</div><div class="code">${escapeHTML(safeMeta.lastModified || '—')}</div></div>
@@ -2272,6 +2566,9 @@ function renderSync() {
       <p class="danger-note">Очистка базы требует ручного подтверждения словом «подтверждаю».</p>
     </section>
   `;
+}
+
+function bindDataManagementActions(root) {
   bindClick(root, '#exportDataBtn', exportData);
   bindClick(root, '#copyDataBtn', () => copyText(JSON.stringify(buildFullBackupObject(), null, 2)));
   bindClick(root, '#importDataBtn', () => $('#importDataInput', root)?.click());
@@ -2285,13 +2582,26 @@ function renderSync() {
   bindClick(root, '#resetDemoBtn', async () => {
     const confirmed = await openTypedConfirmDialog({
       title: 'Очистить текущую базу?',
-      message: 'Это удалит локальные задачи, питание, важные даты и настройки на этом устройстве. Перед очисткой лучше экспортировать tsb_data.json.',
+      message: 'Это удалит primary-базу, recovery-копию, legacy-данные и device ID на этом устройстве. Перед очисткой лучше экспортировать tsb_data.json.',
       phrase: 'подтверждаю',
       confirmText: 'Очистить базу'
     });
     if (!confirmed) return;
-    app = createDefaultData();
-    saveData(app, true);
+
+    const resetResult = TSBStorage.clearAllData({ preserveDeviceId: false });
+    if (!resetResult?.ok) {
+      const failedKeys = Array.isArray(resetResult?.failedKeys) ? resetResult.failedKeys : [];
+      const suffix = failedKeys.length ? `: ${failedKeys.join(', ')}` : '';
+      showToast(`Очистка отменена: не удалось удалить ${failedKeys.length} ключ(а)${suffix}`);
+      return;
+    }
+
+    const freshData = createDefaultData();
+    if (!saveData(freshData, false)) {
+      showToast('Очистка не завершена: не удалось сохранить новую базу');
+      return;
+    }
+    app = freshData;
     renderAll();
     showToast('База очищена');
   });
@@ -2337,6 +2647,7 @@ function buildSettingsHTML() {
     </section>
 
     ${renderGptPlanEditor()}
+    ${renderDataManagementHTML()}
   `;
 }
 
@@ -2354,6 +2665,7 @@ function bindSettingsActions(root = $('#tab-settings')) {
   const copyReportBtn = $('#copyGptReportBtn', root);
   if (copyReportBtn && reportText) copyReportBtn.onclick = () => copyText(reportText.value);
   bindGptPlanActions(root);
+  bindDataManagementActions(root);
 }
 
 function renderSettings() {
@@ -2365,7 +2677,7 @@ function renderSettings() {
 
 function renderTaskAddForm(iso, scope) {
   return `
-    <form class="form-grid" data-task-form data-date="${iso}" data-scope="${scope}">
+    <form class="form-grid" data-task-form data-date="${escapeHTML(iso)}" data-scope="${escapeHTML(scope)}">
       <label>Новая задача<input name="text" required placeholder="Что нужно сделать"></label>
       <label>Комментарий <span class="muted">(необязательно)</span><input name="note" maxlength="160" placeholder="Короткая заметка"></label>
       <button class="primary-button" type="submit">Добавить</button>
@@ -2389,22 +2701,22 @@ function renderTaskCard(task, iso, compact = false) {
   ].filter(Boolean).join('');
   const subtasks = Array.isArray(task.subtasks) && task.subtasks.length ? `
     <div class="subtasks">
-      ${task.subtasks.map(sub => `<label class="subtask"><input type="checkbox" data-subtask-toggle="${task.id}" data-subtask-id="${sub.id}" ${sub.done ? 'checked' : ''}> <span>${escapeHTML(sub.text)}</span></label>`).join('')}
+      ${task.subtasks.map(sub => `<label class="subtask"><input type="checkbox" data-subtask-toggle="${escapeHTML(task.id)}" data-subtask-id="${escapeHTML(sub.id)}" ${sub.done ? 'checked' : ''}> <span>${escapeHTML(sub.text)}</span></label>`).join('')}
     </div>` : '';
   return `
     <article class="task-card ${task.done ? 'done' : ''} ${task.dismissed ? 'dismissed' : ''}">
       <div class="task-top">
         <div class="task-main">
-          <input type="checkbox" data-task-toggle="${task.id}" data-date="${iso}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
+          <input type="checkbox" data-task-toggle="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}" ${task.done ? 'checked' : ''} aria-label="Выполнено">
           <div class="task-content">
             <div class="task-text">${escapeHTML(task.text)}</div>
             <div class="badge-row">${statusBadges}</div>
           </div>
         </div>
         <div class="actions">
-          ${!compact ? `<button class="ghost-button" data-task-sub="${task.id}" data-date="${iso}">Подзадачи</button>` : ''}
-          <button class="ghost-button" data-task-edit="${task.id}" data-date="${iso}">Изм.</button>
-          <button class="danger-button" data-task-delete="${task.id}" data-date="${iso}">Удал.</button>
+          ${!compact ? `<button class="ghost-button" data-task-sub="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Подзадачи</button>` : ''}
+          <button class="ghost-button" data-task-edit="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Изм.</button>
+          <button class="danger-button" data-task-delete="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Удал.</button>
         </div>
       </div>
       ${subtasks}
@@ -2423,7 +2735,7 @@ function renderMealAddForm(scope) {
   const now = new Date();
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return `
-    <form class="form-grid food" data-meal-form data-scope="${scope}">
+    <form class="form-grid food" data-meal-form data-scope="${escapeHTML(scope)}">
       <label>Что ел<input name="name" required placeholder="Что ел"></label>
       <label>Количество / комментарий<input name="amount" placeholder="Порция, состав или заметка"></label>
       <label>Время<input name="time" type="time" value="${time}"></label>
@@ -2445,8 +2757,8 @@ function renderMealList(iso) {
           ${meal.comment ? `<p>${nl2br(meal.comment)}</p>` : ''}
         </div>
         <div class="actions">
-          <button class="ghost-button" data-meal-edit="${meal.id}">Изм.</button>
-          <button class="danger-button" data-meal-delete="${meal.id}">Удал.</button>
+          <button class="ghost-button" data-meal-edit="${escapeHTML(meal.id)}">Изм.</button>
+          <button class="danger-button" data-meal-delete="${escapeHTML(meal.id)}">Удал.</button>
         </div>
       </div>
     </article>`).join('');
@@ -2462,9 +2774,9 @@ function renderImportantCard(item) {
         ${item.description ? `<p class="muted">${nl2br(item.description)}</p>` : ''}
       </div>
       <div class="actions important-actions">
-        <button class="ghost-button" data-important-status="${item.id}" data-status="${item.status === 'done' ? 'active' : 'done'}">${item.status === 'done' ? 'Снова активно' : 'Выполнено'}</button>
-        <button class="ghost-button" data-important-edit="${item.id}">Изм.</button>
-        <button class="danger-button" data-important-delete="${item.id}">Удал.</button>
+        <button class="ghost-button" data-important-status="${escapeHTML(item.id)}" data-status="${escapeHTML(item.status === 'done' ? 'active' : 'done')}">${item.status === 'done' ? 'Снова активно' : 'Выполнено'}</button>
+        <button class="ghost-button" data-important-edit="${escapeHTML(item.id)}">Изм.</button>
+        <button class="danger-button" data-important-delete="${escapeHTML(item.id)}">Удал.</button>
       </div>
     </article>
   `;
@@ -2509,13 +2821,13 @@ function getPendingPastTasksHTML() {
         <div class="task-top">
           <div><div class="task-text">${escapeHTML(task.text)}</div><div class="badge-row"><span class="badge overdue">${shortDate(iso)}</span><span class="badge overdue">Пропущено</span></div></div>
           <div class="actions past-task-actions">
-            <button class="ghost-button" data-task-complete-past="${task.id}" data-date="${iso}">Выполнено</button>
-            <button class="ghost-button" data-task-move="${task.id}" data-date="${iso}">Перенести</button>
+            <button class="ghost-button" data-task-complete-past="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Выполнено</button>
+            <button class="ghost-button" data-task-move="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Перенести</button>
             <details class="more-actions">
               <summary class="ghost-button" aria-label="Ещё действия">...</summary>
               <div class="more-actions-menu">
-                <button class="ghost-button" type="button" data-jump-date="${iso}">Открыть день</button>
-                <button class="ghost-button" type="button" data-task-dismiss="${task.id}" data-date="${iso}">Скрыть</button>
+                <button class="ghost-button" type="button" data-jump-date="${escapeHTML(iso)}">Открыть день</button>
+                <button class="ghost-button" type="button" data-task-dismiss="${escapeHTML(task.id)}" data-date="${escapeHTML(iso)}">Скрыть</button>
               </div>
             </details>
           </div>
@@ -3206,14 +3518,19 @@ function buildFullBackupObject() {
 }
 
 function importData(file) {
+  if (!file || Number(file.size) > MAX_BACKUP_BYTES) {
+    showToast('Импорт отклонён: файл больше 5 MiB');
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result || '{}'));
-      if (parsed?.backupType !== FULL_BACKUP_TYPE || parsed?.formatVersion !== BACKUP_FORMAT_VERSION) {
+      const validation = validateFullBackup(parsed);
+      if (!validation.ok) {
         showToast(parsed?.backupType === FINANCE_BACKUP_TYPE
           ? 'Finance JSON нельзя импортировать как полный backup'
-          : 'Неподдерживаемый формат backup');
+          : validation.reason);
         return;
       }
       const normalized = normalizeData(parsed);

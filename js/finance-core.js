@@ -13,6 +13,15 @@
   const SYSTEM_KINDS=Object.freeze({MIGRATION_ANCHOR:'MIGRATION_ANCHOR',RECONCILIATION:'RECONCILIATION',LEGACY_RESERVE_BALANCE:'LEGACY_RESERVE_BALANCE'});
   const OBLIGATION_STATUS=Object.freeze({ACTIVE:'ACTIVE',PAID:'PAID',CANCELLED:'CANCELLED'});
   const OBLIGATION_RECURRENCE=Object.freeze({NONE:'NONE',MONTHLY:'MONTHLY'});
+  const SAFE_ID_RE=/^[A-Za-z0-9_.:-]{1,128}$/;
+  const FORBIDDEN_IDS=new Set(['__proto__','constructor','prototype']);
+  const MAX_FINANCE_TEXT=10000;
+  const MAX_FINANCE_AMOUNT=1e12;
+  const MAX_ACCOUNTS=1000;
+  const MAX_NAMED_ITEMS=1000;
+  const MAX_TRANSACTIONS=10000;
+  const MAX_RESERVES=5000;
+  const MAX_OBLIGATIONS=5000;
 
   const DEFAULT_CATEGORY_DEFS=Object.freeze([
     ['food','Еда'],['transport','Транспорт'],['home','Дом'],['health','Здоровье'],['other','Другое'],
@@ -25,14 +34,38 @@
 
   const clone=value=>value==null?value:JSON.parse(JSON.stringify(value));
   const nowISO=()=>new Date().toISOString();
-  const makeId=(prefix='fin')=>`${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-  const text=value=>String(value??'').trim();
+  const secureRandomUUID=()=>{
+    const cryptoObject=typeof globalThis!=='undefined'&&globalThis.crypto
+      ? globalThis.crypto
+      : (typeof window!=='undefined'?window.crypto:null);
+    if(typeof cryptoObject?.randomUUID==='function')return cryptoObject.randomUUID();
+    if(typeof cryptoObject?.getRandomValues!=='function')throw new Error('Secure randomness is unavailable');
+    const bytes=new Uint8Array(16);
+    cryptoObject.getRandomValues(bytes);
+    bytes[6]=(bytes[6]&0x0f)|0x40;
+    bytes[8]=(bytes[8]&0x3f)|0x80;
+    const hex=Array.from(bytes,byte=>byte.toString(16).padStart(2,'0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  };
+  const makeId=(prefix='fin')=>`${prefix}_${secureRandomUUID()}`;
+  const text=value=>String(value??'').slice(0,MAX_FINANCE_TEXT).trim();
+  const safeId=(value,prefix)=>{const candidate=text(value);return SAFE_ID_RE.test(candidate)&&!FORBIDDEN_IDS.has(candidate)?candidate:makeId(prefix)};
+  const safeReference=value=>{const candidate=text(value);return SAFE_ID_RE.test(candidate)&&!FORBIDDEN_IDS.has(candidate)?candidate:''};
   const bool=value=>Boolean(value);
-  const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''));
+  const validDate=value=>{
+    if(typeof value!=='string'||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))return false;
+    const year=Number(value.slice(0,4));
+    const month=Number(value.slice(5,7));
+    const day=Number(value.slice(8,10));
+    if(year<1||month<1||month>12)return false;
+    const leap=year%4===0&&(year%100!==0||year%400===0);
+    const daysInMonth=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31];
+    return day>=1&&day<=daysInMonth[month-1];
+  };
   const validTime=value=>/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||''));
   const moneyNumber=value=>{
     const n=Number(String(value??'').replace(',','.'));
-    return Number.isFinite(n)?Math.round(n*100)/100:0;
+    return Number.isFinite(n)?Math.max(-MAX_FINANCE_AMOUNT,Math.min(MAX_FINANCE_AMOUNT,Math.round(n*100)/100)):0;
   };
   const positiveMoney=value=>Math.abs(moneyNumber(value));
   const signedMoney=value=>moneyNumber(value);
@@ -60,7 +93,7 @@
   function normalizeAccount(account,index=0,createdAt=nowISO()){
     const source=account&&typeof account==='object'?account:{};
     return {
-      id:text(source.id)||makeId('acct'),
+      id:safeId(source.id,'acct'),
       name:text(source.name)||`Счёт ${index+1}`,
       type:text(source.type)||'',
       active:source.active!==false&&!source.archived,
@@ -74,7 +107,7 @@
   function normalizeNamedItem(item,index,fallback,createdAt=nowISO()){
     const source=item&&typeof item==='object'?item:{};
     return {
-      id:text(source.id)||fallback.id,
+      id:safeId(source.id||fallback.id,fallback.id?.split('_')[0]||'item'),
       name:text(source.name)||fallback.name,
       active:source.active!==false&&!source.archived,
       archived:bool(source.archived),
@@ -84,26 +117,31 @@
       updatedAt:text(source.updatedAt)||text(source.createdAt)||createdAt
     };
   }
-  function normalizeCollection(items,defaults,createdAt){
-    const source=Array.isArray(items)?items:[];
+  function normalizeCollection(items,defaults,createdAt,cap=MAX_NAMED_ITEMS){
+    const source=Array.isArray(items)?items.slice(0,cap):[];
+    const defaultIds=new Set(defaults.map(item=>item.id));
     const seen=new Set();
     const normalized=[];
+    defaults.slice(0,cap).forEach((fallback,index)=>{
+      const imported=source.find(item=>safeReference(item?.id)===fallback.id);
+      const row=normalizeNamedItem(imported||fallback,index,fallback,createdAt);
+      row.id=fallback.id;row.system=true;
+      seen.add(row.id);normalized.push(row);
+    });
     source.forEach((item,index)=>{
-      const fallback=defaults[index]||{id:`custom_${index}`,name:`Элемент ${index+1}`};
+      if(normalized.length>=cap)return;
+      if(defaultIds.has(safeReference(item?.id)))return;
+      const fallback={id:`custom_${index}`,name:`Элемент ${index+1}`};
       const row=normalizeNamedItem(item,index,fallback,createdAt);
       if(!row.id||seen.has(row.id))return;
       seen.add(row.id);normalized.push(row);
-    });
-    defaults.forEach((fallback,index)=>{
-      if(seen.has(fallback.id))return;
-      const row=normalizeNamedItem(fallback,normalized.length,fallback,createdAt);seen.add(row.id);normalized.push(row);
     });
     return normalized;
   }
 
   function baseTransaction(source,createdAt){
     return {
-      id:text(source.id)||makeId('txn'),
+      id:safeId(source.id,'txn'),
       type:text(source.type).toUpperCase(),
       amount:0,
       date:validDate(source.date)?source.date:createdAt.slice(0,10),
@@ -120,19 +158,19 @@
 
     if(row.type===TYPES.EXPENSE){
       row.amount=positiveMoney(source.amount);
-      row.accountId=text(source.accountId);
-      row.categoryId=text(source.categoryId??source.category)||'other';
+      row.accountId=safeReference(source.accountId);
+      row.categoryId=safeReference(source.categoryId??source.category)||'other';
     }else if(row.type===TYPES.INCOME){
       row.amount=positiveMoney(source.amount);
-      row.accountId=text(source.accountId);
-      row.incomeTypeId=text(source.incomeTypeId)||'other';
+      row.accountId=safeReference(source.accountId);
+      row.incomeTypeId=safeReference(source.incomeTypeId)||'other';
     }else if(row.type===TYPES.TRANSFER){
       row.amount=positiveMoney(source.amount);
-      row.fromAccountId=text(source.fromAccountId);
-      row.toAccountId=text(source.toAccountId);
+      row.fromAccountId=safeReference(source.fromAccountId);
+      row.toAccountId=safeReference(source.toAccountId);
     }else if(row.type===TYPES.ADJUSTMENT){
       row.amount=signedMoney(source.amount);
-      row.accountId=text(source.accountId);
+      row.accountId=safeReference(source.accountId);
       const systemKind=text(source.systemKind);
       if(systemKind)row.systemKind=systemKind;
     }
@@ -144,7 +182,7 @@
     const rawTarget=source.targetAmount;
     const target=rawTarget===null||rawTarget===undefined||text(rawTarget)===''?null:positiveMoney(rawTarget);
     return {
-      id:text(source.id)||makeId('reserve'),
+      id:safeId(source.id,'reserve'),
       name:text(source.name)||`Резерв ${index+1}`,
       amount:nonNegativeMoney(source.amount),
       targetAmount:target&&target>0?target:null,
@@ -160,16 +198,16 @@
     const rawStatus=text(source.status).toUpperCase();
     const rawRecurrence=text(source.recurrence).toUpperCase();
     return {
-      id:text(source.id)||makeId('obligation'),
+      id:safeId(source.id,'obligation'),
       name:text(source.name??source.title)||`Платёж ${index+1}`,
       amount:positiveMoney(source.amount),
       dueDate:validDate(source.dueDate??source.date)?String(source.dueDate??source.date):'',
       recurrence:Object.values(OBLIGATION_RECURRENCE).includes(rawRecurrence)?rawRecurrence:OBLIGATION_RECURRENCE.NONE,
       status:Object.values(OBLIGATION_STATUS).includes(rawStatus)?rawStatus:OBLIGATION_STATUS.ACTIVE,
       note:text(source.note??source.comment),
-      linkedTransactionId:text(source.linkedTransactionId)||null,
-      recurrenceParentId:text(source.recurrenceParentId)||null,
-      nextObligationId:text(source.nextObligationId)||null,
+      linkedTransactionId:safeReference(source.linkedTransactionId)||null,
+      recurrenceParentId:safeReference(source.recurrenceParentId)||null,
+      nextObligationId:safeReference(source.nextObligationId)||null,
       createdAt:text(source.createdAt)||createdAt,
       updatedAt:text(source.updatedAt)||text(source.createdAt)||createdAt
     };
@@ -178,19 +216,24 @@
   function normalizeFinance(value,createdAt=nowISO()){
     const source=value&&typeof value==='object'?value:{};
     const defaults=createEmptyFinance(createdAt);
-    const accounts=(Array.isArray(source.accounts)?source.accounts:[]).map((item,index)=>normalizeAccount(item,index,createdAt));
+    const normalizeUnique=(items,normalizer)=>{
+      const seen=new Set();
+      return items.map(normalizer).filter(item=>{
+        if(seen.has(item.id))return false;
+        seen.add(item.id);return true;
+      });
+    };
+    const accounts=normalizeUnique(Array.isArray(source.accounts)?source.accounts.slice(0,MAX_ACCOUNTS):[],(item,index)=>normalizeAccount(item,index,createdAt));
     const defaultIds=DEFAULT_CATEGORY_DEFS.map(([id,name])=>({id,name,system:true}));
     const incomeIds=DEFAULT_INCOME_TYPE_DEFS.map(([id,name])=>({id,name,system:true}));
-    const categories=normalizeCollection(source.categories,defaultIds,createdAt);
-    const incomeTypes=normalizeCollection(source.incomeTypes,incomeIds,createdAt);
-    const transactions=(Array.isArray(source.transactions)?source.transactions:[]).map(item=>normalizeTransaction(item,createdAt)).filter(Boolean);
-    const reserves=(Array.isArray(source.reserves)?source.reserves:[]).map((item,index)=>normalizeReserve(item,index,createdAt));
-    const obligations=(Array.isArray(source.obligations)?source.obligations:[]).map((item,index)=>normalizeObligation(item,index,createdAt));
+    const categories=normalizeCollection(source.categories,defaultIds,createdAt,MAX_NAMED_ITEMS);
+    const incomeTypes=normalizeCollection(source.incomeTypes,incomeIds,createdAt,MAX_NAMED_ITEMS);
+    const transactions=normalizeUnique((Array.isArray(source.transactions)?source.transactions.slice(0,MAX_TRANSACTIONS):[]).map(item=>normalizeTransaction(item,createdAt)).filter(Boolean),item=>item);
+    const reserves=normalizeUnique(Array.isArray(source.reserves)?source.reserves.slice(0,MAX_RESERVES):[],(item,index)=>normalizeReserve(item,index,createdAt));
+    const obligations=normalizeUnique(Array.isArray(source.obligations)?source.obligations.slice(0,MAX_OBLIGATIONS):[],(item,index)=>normalizeObligation(item,index,createdAt));
     if(accounts.length&&!accounts.some(a=>a.isDefault))accounts[0].isDefault=true;
     if(accounts.filter(a=>a.isDefault).length>1){let kept=false;accounts.forEach(a=>{if(a.isDefault&&!kept)kept=true;else if(a.isDefault)a.isDefault=false})}
     return {
-      ...defaults,
-      ...source,
       schemaVersion:FINANCE_SCHEMA_VERSION,
       migration:{
         checkpoint:text(source.migration?.checkpoint),
@@ -200,7 +243,7 @@
         legacyReserveStatus:text(source.migration?.legacyReserveStatus),
         legacyReserveAmount:nonNegativeMoney(source.migration?.legacyReserveAmount),
         legacyReserveBalanceStatus:text(source.migration?.legacyReserveBalanceStatus),
-        legacyReserveBalanceTransactionId:text(source.migration?.legacyReserveBalanceTransactionId),
+        legacyReserveBalanceTransactionId:safeReference(source.migration?.legacyReserveBalanceTransactionId),
         legacyReserveBalanceRestoredAt:text(source.migration?.legacyReserveBalanceRestoredAt),
         legacyObligationsMigrated:Number(source.migration?.legacyObligationsMigrated||0),
         legacyObligationsSkipped:Number(source.migration?.legacyObligationsSkipped||0)
@@ -745,7 +788,7 @@
   return Object.freeze({
     FINANCE_SCHEMA_VERSION,MIGRATION_CHECKPOINT,PART2_MIGRATION_CHECKPOINT,UPCOMING_OBLIGATION_DAYS,TYPES,SYSTEM_KINDS,OBLIGATION_STATUS,OBLIGATION_RECURRENCE,
     clone,makeId,moneyNumber,createDefaultCategories,createDefaultIncomeTypes,createEmptyFinance,
-    normalizeAccount,normalizeTransaction,normalizeReserve,normalizeObligation,normalizeFinance,validateTransactionShape,
+    normalizeAccount,normalizeTransaction,normalizeReserve,normalizeObligation,normalizeFinance,safeId,validateTransactionShape,
     accountEffect,isMigrationComplete,migrateLegacyState,isPart2MigrationComplete,migratePart2State,
     getAccount,getDefaultAccount,getAccountBalance,getTotalBalance,getTransactions,isSystemLocked,
     createTransaction,updateTransaction,deleteTransaction,createAccount,updateAccount,archiveAccount,reconcileAccount,

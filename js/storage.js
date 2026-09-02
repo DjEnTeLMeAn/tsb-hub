@@ -61,5 +61,37 @@
     }
   }
 
-  global.TSBStorage = Object.freeze({ KEYS, get, set, remove });
+  function clearAllData({ preserveDeviceId = false } = {}) {
+    const keys = [
+      STORAGE_KEY,
+      RECOVERY_BACKUP_KEY,
+      OLD_TSB_KEY,
+      OLD_HEALTH_KEY,
+      OLD_HEALTH_SETTINGS_KEY
+    ];
+    if (!preserveDeviceId) keys.push(DEVICE_ID_KEY);
+
+    const failedKeys = [];
+    for (const key of keys) {
+      if (!remove(key)) {
+        failedKeys.push(key);
+        continue;
+      }
+
+      // Treat a storage implementation that silently keeps the value as a
+      // failure too; callers must be able to detect a partial reset.
+      try {
+        if (global.localStorage.getItem(key) !== null) failedKeys.push(key);
+      } catch (error) {
+        failedKeys.push(key);
+      }
+    }
+
+    return {
+      ok: failedKeys.length === 0,
+      failedKeys
+    };
+  }
+
+  global.TSBStorage = Object.freeze({ KEYS, get, set, remove, clearAllData });
 })(window);

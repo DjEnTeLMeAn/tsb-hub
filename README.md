@@ -1,12 +1,12 @@
-# TSB Hub v0.13.8-brand-splash-20260831
+# TSB Hub v0.13.9-security-hardening-20260831
 
 Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
 ## Текущий релиз
 
-- Release: `0.13.8-brand-splash-20260831`
+- Release: `0.13.9-security-hardening-20260831`
 - Published: `2026-08-31T00:00:00+07:00`
-- Cache: `tsb-hub-0.13.8-brand-splash-20260831`
+- Cache: `tsb-hub-0.13.9-security-hardening-20260831`
 - Finance schema: `3`
 
 Запуск локально: открыть `index.html`. Для телефона загрузить папку на GitHub Pages и открыть через Chrome или установленное PWA.
@@ -44,6 +44,16 @@
 - Импорт принимает только JSON-файл, повторно нормализует данные и перед заменой локальной базы показывает подтверждение.
 - Более старый backup импортируется только после отдельного подтверждения; исходный файл не изменяется.
 - Finance JSON и CSV операций — отдельные выгрузки. Finance JSON содержит `financeSchemaVersion`; CSV не является backup и не предназначен для обратного импорта.
+
+## Реализованные security safeguards
+
+- Строгая валидация backup перед импортом и полной заменой локальной базы.
+- XSS-safe идентификаторы и sinks для пользовательских данных.
+- Полный reset локальных данных с подтверждением и очисткой связанных состояний.
+- Защита CSV-выгрузки от spreadsheet formula injection.
+- CSP и security headers для статического приложения.
+- Service worker обходит будущие sensitive routes (`/api`, `/auth`, `/session`) и не кэширует их.
+- Security CI и ruleset-конфигурация для автоматических проверок.
 
 ## PWA shell и обязательные файлы
 

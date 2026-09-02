@@ -9,6 +9,7 @@ const exists = file => fs.existsSync(path.join(root, file));
 const vm = require('node:vm');
 
 const app = read('js/app.js');
+const bootstrap = read('js/bootstrap.js');
 const storage = read('js/storage.js');
 const index = read('index.html');
 const updateManager = read('js/update-manager.js');
@@ -23,6 +24,7 @@ const requiredFiles = [
   'css/style.css', 'css/mobile-first-cleanup.css', 'css/mobile-dashboard.css',
   'css/mobile-finance.css', 'css/confirm-dialog.css',
   'js/update-manager.js', 'js/finance-core.js', 'js/app.js',
+  'js/bootstrap.js',
   'js/mobile-first-cleanup.js', 'js/mobile-dashboard.js',
   'icons/icon-192.png', 'icons/icon-512.png'
 ];
@@ -50,7 +52,8 @@ test('release metadata is structurally valid and consistent across the PWA shell
   assert.equal(manifest.display, 'standalone');
   assert.ok(index.includes(`data-release="${release}"`));
   assert.ok(index.includes(`name="tsb-release" content="${release}"`));
-  assert.ok(index.includes(`window.TSB_RELEASE='${release}'`));
+  assert.ok(bootstrap.includes(`window.TSB_RELEASE='${release}'`));
+  assert.ok(index.includes(`js/bootstrap.js?v=${release}`));
   assert.ok(updateManager.includes(`const RELEASE='${release}'`));
   assert.ok(serviceWorker.includes(`const RELEASE='${release}'`));
   assert.ok(serviceWorker.includes('const CACHE_NAME=`tsb-hub-${RELEASE}`'));
@@ -64,7 +67,9 @@ test('full and Finance exports declare their backup type and format version', ()
   assert.match(app, /function buildFinanceExportObject[\s\S]*?backupType:FINANCE_BACKUP_TYPE,formatVersion:BACKUP_FORMAT_VERSION/);
   assert.match(app, /function buildFullBackupObject[\s\S]*?exportObject\.backupType\s*=\s*FULL_BACKUP_TYPE/);
   assert.match(app, /function buildFullBackupObject[\s\S]*?exportObject\.formatVersion\s*=\s*BACKUP_FORMAT_VERSION/);
-  assert.match(app, /parsed\?\.backupType !== FULL_BACKUP_TYPE \|\| parsed\?\.formatVersion !== BACKUP_FORMAT_VERSION/);
+  assert.match(app, /function validateFullBackup\([\s\S]*?value\.backupType !== FULL_BACKUP_TYPE \|\| value\.formatVersion !== BACKUP_FORMAT_VERSION/);
+  assert.match(app, /const validation = validateFullBackup\(parsed\)/);
+  assert.match(app, /if \(!validation\.ok\)/);
   assert.match(app, /parsed\?\.backupType === FINANCE_BACKUP_TYPE/);
 });
 

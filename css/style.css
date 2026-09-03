@@ -800,6 +800,25 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* История стилей: адаптация под GitHub Pages, ПК + Android */
 html, body { max-width: 100%; overflow-x: hidden; }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.food-ai-result { display: grid; gap: 12px; min-width: 0; }
+.food-ai-result label { display: grid; gap: 6px; min-width: 0; }
+.food-ai-result input, .food-ai-result textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.food-ai-result textarea { min-height: 76px; resize: vertical; }
+.food-ai-result .grid-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.food-ai-result button, [data-food-ai-panel] button { min-height: 44px; }
+@media (max-width: 480px) { .food-ai-result .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Удобная публикация через GitHub Pages: приложение не должно зависеть от file:// */
 .app-shell { isolation: isolate; }
@@ -2016,5 +2035,14 @@ img, svg, video, canvas { max-width: 100%; }
 
   .app-header {
     height: 52px !important;
+  }
+
+  .app-header .date-switcher .icon-button,
+  .app-header .profile-settings-button,
+  #tab-food [data-food-ai-camera],
+  #tab-food [data-food-ai-gallery],
+  #tab-food [data-food-ai-cancel] {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

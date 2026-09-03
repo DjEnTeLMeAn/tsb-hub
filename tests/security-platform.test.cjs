@@ -13,7 +13,7 @@ const sw = read('service-worker.js');
 const bootstrap = read('js/bootstrap.js');
 const gitignore = read('.gitignore');
 
-const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'";
+const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'";
 
 test('index has the exact restrictive CSP and only external scripts', () => {
   const csp = index.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"\s*\/>/i)?.[1];

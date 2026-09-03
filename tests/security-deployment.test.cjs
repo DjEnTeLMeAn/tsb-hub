@@ -10,7 +10,7 @@ const envExample = read('.env.example');
 const security = read('SECURITY.md');
 const cloudflareSecurity = read('docs/CLOUDFLARE_SECURITY.md');
 const contract = `${security}\n${cloudflareSecurity}`;
-const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'";
+const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'";
 
 test('Cloudflare static shell headers enforce the agreed browser policy', () => {
   const activeRules = headers

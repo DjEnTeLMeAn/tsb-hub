@@ -1,4 +1,4 @@
-const RELEASE='0.13.9-security-hardening-20260831';
+const RELEASE='0.14.0-food-photo-ai-20260904';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,
@@ -13,6 +13,7 @@ const APP_SHELL=[
   `./js/finance-core.js?v=${RELEASE}`,
   `./js/storage.js?v=${RELEASE}`,
   `./js/api-key-vault.js?v=${RELEASE}`,
+  `./js/food-ai-client.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,

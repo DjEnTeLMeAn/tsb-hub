@@ -22,8 +22,8 @@ test('documentation distinguishes implemented foundation from deployment and cli
   assert.match(docs, /application code can call decrypt|app code can call decrypt/i);
   for (const route of ['/session', '/auth/logout', '/api/v1/state']) assert.match(docs, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.doesNotMatch(docs, /\/api\/v1\/preferences|credential metadata/i);
-  assert.match(docs, /local(?: provider\/model selection|ный выбор provider\/model).*implemented|локальный выбор provider\/model.*реализован/is);
-  for (const provider of ['openai', 'anthropic', 'gemini']) assert.match(docs, new RegExp(provider));
+  assert.match(docs, /Gemini.*implemented only for Food photo[\s\S]*local vault/is);
+  for (const provider of ['openai', 'anthropic', 'gemini']) assert.match(docs, new RegExp(provider, 'i'));
   assert.match(docs, /AES-256-GCM|AES-GCM/i); assert.match(docs, /provider proxy.*(?:not|no).*implemented|no provider proxy/i);
   assert.doesNotMatch(docs, /D1\s+(?:stores?|хранит)[^\n]*(?:provider|API)\s*key/i);
   assert.doesNotMatch(docs, /(?:active|implemented|deployed|configured)[^\n]*(?:server encrypted credential vault|AI_CREDENTIAL_KEK)|(?:server encrypted credential vault|AI_CREDENTIAL_KEK)[^\n]*(?:active|implemented|deployed|configured)/i);

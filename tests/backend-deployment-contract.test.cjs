@@ -43,8 +43,8 @@ test('architecture documents required invariants and contracts', () => {
   for (const term of ['Cloudflare Access is the account authority', 'no application', 'signature', 'issuer (`iss`)', 'audience', 'expiry', 'IDOR', 'exact allowlisted `Origin`', 'HMAC CSRF', 'GET /session` returns', 'validated', 'no-store', 'optimistic concurrency', 'whole-state', 'server-side proxy', 'arbitrary base URL', 'SSRF', 'IndexedDB', 'backup bombs', 'log leaks', 'Secret rotation', '`GET /session`', '`GET /api/v1/state`', '`PUT /api/v1/state`', 'credential', 'migrations', 'Cloudflare Access team', 'application AUD', 'wrangler secret put', 'deploy preview', 'verified configuration for production', 'client remains disconnected']) {
     assert.match(s, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), term);
   }
-  assert.match(s, /local-only provider\/preference[\s\S]*local provider\/model selection and the vault are implemented/i);
-  assert.match(s, /local-only provider\/preference[\s\S]*IndexedDB|IndexedDB[\s\S]*local-only provider\/preference/i);
+  assert.match(s, /Gemini is implemented only for Food photo[\s\S]*local vault/i);
+  assert.match(s, /local vault[\s\S]*IndexedDB/i);
   assert.doesNotMatch(s, /\/api\/v1\/preferences/i);
   assert.doesNotMatch(s, /CSRF[^\n]*(?:reused|single-use|one-time)|(?:reused|single-use|one-time)[^\n]*CSRF/i);
 });

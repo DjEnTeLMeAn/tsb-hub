@@ -1,0 +1,10 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const root=path.resolve(__dirname,'..');
+const read=f=>fs.readFileSync(path.join(root,f),'utf8');
+const client=read('js/food-ai-client.js'),app=read('js/app.js'),sw=read('service-worker.js'),index=read('index.html');
+test('Food AI bounds and strict decoding',()=>{for(const s of ['MAX_SOURCE','MAX_IMAGE','MAX_REQUEST','MAX_RESPONSE','TextDecoder','fatal: true','content-length','reader.cancel','Number.isFinite','value < 0','bitmap?.close?.()','no-store','referrerPolicy'])assert.ok(client.includes(s),s);assert.doesNotMatch(client,/baseURL/);assert.doesNotMatch(client,/console\.(log|error).*apiKey/)});
+test('UI local Gemini selection and no file/key persistence',()=>{assert.match(app,/provider!==['"]gemini['"]/);assert.match(app,/foodGeminiModel/);assert.match(app,/input\.value=''/);assert.match(app,/requestId/);assert.match(app,/ai\.requestId!==requestId/);assert.doesNotMatch(app,/localStorage[\s\S]{0,300}(?:apiKey|API key)/i)});
+test('SW cross-origin bypass and exact Gemini CSP',()=>{assert.match(sw,/url\.origin!==self\.location\.origin\)return/);assert.match(sw,/sensitiveRoots=\['\/api','\/auth','\/session'\]/);const csp=index.match(/Content-Security-Policy" content="([^"]+)/)[1];assert.match(csp,/connect-src 'self' https:\/\/generativelanguage\.googleapis\.com/);assert.doesNotMatch(csp,/connect-src[^;]*(?:\*|data:|blob:)/)});

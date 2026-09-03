@@ -19,7 +19,7 @@ const requiredFiles = [
   'index.html', 'manifest.json', 'version.json', 'service-worker.js',
   'css/style.css', 'css/mobile-first-cleanup.css', 'css/mobile-dashboard.css',
   'css/mobile-finance.css', 'css/confirm-dialog.css',
-  'js/update-manager.js', 'js/finance-core.js', 'js/api-key-vault.js', 'js/app.js',
+  'js/update-manager.js', 'js/finance-core.js', 'js/api-key-vault.js', 'js/food-ai-client.js', 'js/app.js',
   'js/bootstrap.js',
   'js/mobile-first-cleanup.js', 'js/mobile-dashboard.js',
   'icons/icon-192.png', 'icons/icon-512.png'

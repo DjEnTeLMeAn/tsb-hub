@@ -252,3 +252,15 @@ html,body{scrollbar-width:none!important;-ms-overflow-style:none!important}html:
   body #tab-tasks .task-list-actionsheet{width:calc(100% - 20px);max-width:none;margin:auto;}
   body #tab-tasks .task-list-actionsheet-panel{padding:16px;border-radius:18px;}
 }
+
+/* Mobile accessibility contract for visible app-level controls. */
+@media(max-width:600px){
+  body .app-header .date-switcher .icon-button,
+  body .app-header .profile-settings-button,
+  body #tab-food [data-food-ai-camera],
+  body #tab-food [data-food-ai-gallery],
+  body #tab-food [data-food-ai-cancel]{
+    min-width:44px!important;
+    min-height:44px!important;
+  }
+}

@@ -6,10 +6,10 @@ The backend foundation is implemented locally with Pages Functions, D1, and Clou
 
 After installation, the user enters the provider API key on the phone. The local vault stores an encrypted value in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext is memory-only and never persistent. The key is excluded from repository/GitHub, builds and bundles, service-worker cache, app backup, state sync, D1, and server logs.
 
-Provider/preference local-only values are restricted to `openai`, `anthropic`, and `gemini`; local provider/model selection and the vault are implemented.
+Gemini is implemented only for Food photo through a direct browser call. OpenAI and Anthropic are not implemented. The key is local; plaintext is transiently placed only in the direct request header. After the user selects a photo, it is sent to Google Gemini. Key, photo, and response are excluded from backup/sync, service-worker cache, and server logs. Nutrition estimates are approximate and require confirmation; CORS and Gemini platform/free-tier limits apply.
 The removed server encrypted credential vault and `AI_CREDENTIAL_KEK` are absent from the target model and are not accepted by this contract.
 
-There are no real provider API calls or proxy routes. A future design may use direct CORS where supported or an audited fixed-allowlist proxy receiving the key transiently per request, with no persistence, logging, or caching. It is not implemented. A new proxy requires a separate audit.
+There is no provider proxy route. The only provider call is direct Gemini Food photo analysis from the shell, subject to provider CORS and platform/free-tier limits. No key query parameter is used and the service worker does not cache the cross-origin request or response.
 
 The threat model covers GitHub/backup exposure and casual IndexedDB inspection. It does not cover active same-origin XSS, compromised JavaScript, or a malicious device: app code can call decrypt. The user accepts this limitation.
 

@@ -12,6 +12,7 @@ const APP_SHELL=[
   `./js/update-manager.js?v=${RELEASE}`,
   `./js/finance-core.js?v=${RELEASE}`,
   `./js/storage.js?v=${RELEASE}`,
+  `./js/api-key-vault.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,

@@ -1,59 +1,33 @@
-# Cloudflare Pages security contract
+# Cloudflare security status
 
-This is a deployment contract for the future backend. The present project is a
-static Pages shell; no backend or authentication implementation is asserted by
-this document.
+The backend foundation is implemented locally with Pages Functions, D1, and Cloudflare Access, but is not provisioned or deployed. The client is not connected; the local vault is not deployed. Backend scope is accounts/state only.
 
-## Required route contract
+## API-key boundary
 
-Use same-origin routes: `/api/*` for application data, `/auth/*` for login and
-recovery, and `/session/*` for session lifecycle. CORS is deny-by-default; no
-wildcard `Access-Control-Allow-Origin`, and no credentialed cross-origin API.
+After installation, the user enters the provider API key on the phone. The local vault stores an encrypted value in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext is memory-only and never persistent. The key is excluded from repository/GitHub, builds and bundles, service-worker cache, app backup, state sync, D1, and server logs.
 
-Workers must authenticate on the server and establish sessions with cookies
-that are `Secure`, `HttpOnly`, and `SameSite=Lax` or stricter. The client must
-never receive API keys, provider tokens, access/refresh tokens, signing
-secrets, or database credentials. Cookie-authenticated state changes require
-CSRF validation plus same-origin `Origin`/`Referer` checks.
+Provider/preference local-only values are restricted to `openai`, `anthropic`, and `gemini`; local provider/model selection and the vault are implemented.
+The removed server encrypted credential vault and `AI_CREDENTIAL_KEK` are absent from the target model and are not accepted by this contract.
 
-Before a handler reaches D1, validate path parameters, query parameters,
-headers, and JSON bodies with a server-side schema. Use authenticated user
-identity—not a client-supplied user ID—for authorization. Every D1 select,
-update, delete, and batch operation must constrain rows by the authenticated
-owner; add explicit ownership/IDOR tests for every resource.
+There are no real provider API calls or proxy routes. A future design may use direct CORS where supported or an audited fixed-allowlist proxy receiving the key transiently per request, with no persistence, logging, or caching. It is not implemented. A new proxy requires a separate audit.
 
-Rate-limit login, recovery, session refresh, and mutations. Use bounded request
-sizes, safe generic authentication errors, and consistent failure responses.
+The threat model covers GitHub/backup exposure and casual IndexedDB inspection. It does not cover active same-origin XSS, compromised JavaScript, or a malicious device: app code can call decrypt. The user accepts this limitation.
 
-## Cache and service-worker rules
+## Required route and response contract
 
-The Pages `_headers` file applies only to the static shell; it does not apply
-to Pages Functions or a Worker-generated `Response`. Functions/Worker code
-must add CSP and every other required browser security header directly to each
-`Response` or in shared middleware.
+Use same-origin routes: `/api/*` for application state, `/auth/*` for session lifecycle, and `/session/*` for session summary. CORS is deny-by-default; no wildcard `Access-Control-Allow-Origin` and no credentialed cross-origin API.
 
-Each Functions/Worker response for `/api`, `/auth`, and `/session` must set
-`Cache-Control: no-store` directly or through that shared middleware. This
-requirement covers exact and descendant routes, every success, error, and
-redirect response. The service worker must bypass these paths before
-`respondWith`, cache reads, or cache writes regardless of method or query
-string. Static HTML, JS, CSS, and manifest assets may retain normal PWA
-caching; there must be no global `no-store` header.
+Authentication, authorization, input validation, and ownership checks are server-side. D1 operations are account-scoped and client IDs are not authority. If a future app cookie is introduced it must be `Secure`, `HttpOnly`, and `SameSite=Lax` or stricter. Cookie-authenticated mutations require CSRF and same-origin `Origin`/`Referer` checks.
 
-## Cloudflare configuration and operations
+Dynamic Functions/Worker responses must add security headers and `Cache-Control: no-store` directly for exact and descendant `/api`, `/auth`, and `/session` routes, on every success, error, and redirect. The static `_headers` file does not apply to Pages Functions. The service worker bypasses these paths before cache reads/writes for every method and query; static shell assets may retain normal PWA caching.
 
-Production and preview must be separate Pages/Workers environments with
-separate domains, D1 bindings/databases, cookie scope, and secrets. Preview
-must not access production data or credentials.
+## Accounts/state-only deployment runbook
 
-Store real secret values only with Cloudflare Secrets (for example, `wrangler
-secret put`), never in `vars`, `.env` committed to git, build artifacts, or
-browser code. Rotate secrets after exposure and during the documented rotation
-cycle. Redact cookies, authorization values, CSRF tokens, API keys, reset
-links, and request bodies from Workers, D1, and observability logs.
+1. Create separate private preview and production D1 databases for accounts/state and keep IDs private.
+2. Configure private Wrangler/Pages bindings; never commit IDs or secrets.
+3. Apply and verify state migrations `0001`, then `0002`, independently in each environment.
+4. Configure Cloudflare Access team, application AUD, and exact app origin.
+5. Configure the unauthenticated `/session` edge perimeter limit and deploy preview.
+6. Run the server adversarial audit, then integrate client sync only after approval; repeat verified configuration for production.
 
-The `_headers` file supplies the static-shell browser policy: same-origin CSP
-with `frame-ancestors 'none'`, clickjacking protection, MIME sniffing
-protection, strict referrer handling, disabled unnecessary browser features,
-and same-origin opener isolation. It does not implement authentication or
-replace server-side authorization.
+No credential KEK or provider migration belongs in this runbook. Real provider integrations remain unaudited and unimplemented.

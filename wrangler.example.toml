@@ -1,0 +1,19 @@
+# Template only: replace every __REPLACE_ME__ privately before deployment.
+# These are deliberately invalid IDs; never deploy this example as-is.
+name = "tsb-hub"
+compatibility_date = "2026-08-01"
+pages_build_output_dir = "."
+
+[env.preview]
+name = "tsb-hub-preview"
+[[env.preview.d1_databases]]
+binding = "TSB_DB"
+database_name = "tsb-hub-preview"
+database_id = "__REPLACE_ME_PREVIEW_D1_DATABASE_ID__"
+
+[env.production]
+name = "tsb-hub-production"
+[[env.production.d1_databases]]
+binding = "TSB_DB"
+database_name = "tsb-hub-production"
+database_id = "__REPLACE_ME_PRODUCTION_D1_DATABASE_ID__"

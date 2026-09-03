@@ -1,0 +1,7 @@
+# Safe local placeholders only; never put real credentials here.
+# Real CSRF_HMAC_KEY is a Cloudflare Secret only, never vars/git.
+CF_ACCESS_TEAM_NAME=example-team
+CF_ACCESS_AUD=__REPLACE_ME_ACCESS_AUD_TAG__
+APP_ORIGIN=https://app.example.invalid
+ENVIRONMENT=local
+CSRF_HMAC_KEY=__REPLACE_ME_LOCAL_SECRET__

@@ -2647,8 +2647,76 @@ function buildSettingsHTML() {
     </section>
 
     ${renderGptPlanEditor()}
+    ${renderApiKeyVaultHTML()}
     ${renderDataManagementHTML()}
   `;
+}
+
+function renderApiKeyVaultHTML(metadata = [], provider = 'openai', model = '') {
+  const saved = metadata.find(item => item.provider === provider);
+  return `
+    <section class="card settings-card api-key-vault-card" id="apiKeyVault" aria-labelledby="apiKeyVaultTitle">
+      <div class="card-title-row"><div><h2 id="apiKeyVaultTitle">Локальные API-ключи</h2><p class="muted">Ключи шифруются и хранятся только на этом устройстве.</p></div></div>
+      <div class="settings-grid">
+        <label class="setting-row"><span>API-провайдер<select id="apiKeyProvider" aria-label="API-провайдер">
+          ${[['openai','OpenAI'],['anthropic','Anthropic'],['gemini','Gemini']].map(([value, label]) => `<option value="${value}" ${provider === value ? 'selected' : ''}>${label}</option>`).join('')}
+        </select></span></label>
+        <label class="setting-row"><span>Модель <span class="muted">(необязательно)</span><input id="apiKeyModel" type="text" maxlength="200" autocomplete="off" value="${escapeHTML(model)}" placeholder="Например, gpt-4o-mini"></span></label>
+        <label class="setting-row"><span>API-ключ<input id="apiKeyInput" type="password" minlength="8" maxlength="4096" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Введите ключ"></span></label>
+        <div class="api-key-vault-actions"><button class="primary-button" id="saveApiKeyBtn" type="button">Сохранить</button><button class="danger-button" id="deleteApiKeyBtn" type="button">Удалить</button></div>
+        <p class="muted" id="apiKeyVaultStatus" role="status" aria-live="polite">Проверяем локальное хранилище…</p>
+      </div>
+    </section>`;
+}
+
+async function refreshApiKeyVault(root, provider) {
+  const status = $('#apiKeyVaultStatus', root);
+  if (!status || !window.TSBApiKeyVault) return;
+  try {
+    const metadata = await TSBApiKeyVault.listKeys();
+    const item = metadata.find(entry => entry.provider === provider);
+    status.textContent = item ? `Ключ сохранён только на этом устройстве · последние 4: ${item.lastFour}` : 'Ключ для этого провайдера не сохранён';
+  } catch (error) { status.textContent = 'Локальное хранилище недоступно'; }
+}
+
+async function hydrateApiKeyVault(root) {
+  if (!window.TSBApiKeyVault) return;
+  const providerSelect = $('#apiKeyProvider', root);
+  const modelInput = $('#apiKeyModel', root);
+  try {
+    const provider = await TSBApiKeyVault.getPreference('selectedProvider') || 'openai';
+    const model = await TSBApiKeyVault.getPreference('selectedModel') || '';
+    if (providerSelect) providerSelect.value = provider;
+    if (modelInput) modelInput.value = model;
+    await refreshApiKeyVault(root, provider);
+  } catch (error) {
+    const status = $('#apiKeyVaultStatus', root); if (status) status.textContent = 'Локальное хранилище недоступно';
+  }
+}
+
+function bindApiKeyVaultActions(root) {
+  const providerSelect = $('#apiKeyProvider', root);
+  const modelInput = $('#apiKeyModel', root);
+  const input = $('#apiKeyInput', root);
+  const save = $('#saveApiKeyBtn', root);
+  const remove = $('#deleteApiKeyBtn', root);
+  if (!providerSelect || !input || !save || !remove || !window.TSBApiKeyVault) return;
+  const setBusy = busy => { [providerSelect, modelInput, input, save, remove].forEach(element => { if (element) element.disabled = busy; }); };
+  providerSelect.onchange = async () => { try { await TSBApiKeyVault.setPreference('selectedProvider', providerSelect.value); await hydrateApiKeyVault(root); } catch (error) { showToast('Не удалось обновить настройки'); } };
+  modelInput.onchange = async () => { try { await TSBApiKeyVault.setPreference('selectedModel', modelInput.value); } catch (error) { showToast('Не удалось обновить настройки'); } };
+  save.onclick = async () => {
+    const provider = providerSelect.value; const value = input.value;
+    setBusy(true);
+    try { await TSBApiKeyVault.saveKey(provider, value); await TSBApiKeyVault.setPreference('selectedProvider', provider); await TSBApiKeyVault.setPreference('selectedModel', modelInput?.value || ''); input.value = ''; await refreshApiKeyVault(root, provider); showToast('Ключ сохранён локально'); }
+    catch (error) { input.value = ''; showToast('Не удалось сохранить ключ'); await refreshApiKeyVault(root, provider); }
+    finally { setBusy(false); }
+  };
+  remove.onclick = async () => {
+    const provider = providerSelect.value; setBusy(true);
+    try { await TSBApiKeyVault.deleteKey(provider); input.value = ''; await refreshApiKeyVault(root, provider); showToast('Ключ удалён'); }
+    catch (error) { showToast('Не удалось удалить ключ'); }
+    finally { setBusy(false); }
+  };
 }
 
 function bindSettingsActions(root = $('#tab-settings')) {
@@ -2665,7 +2733,9 @@ function bindSettingsActions(root = $('#tab-settings')) {
   const copyReportBtn = $('#copyGptReportBtn', root);
   if (copyReportBtn && reportText) copyReportBtn.onclick = () => copyText(reportText.value);
   bindGptPlanActions(root);
+  bindApiKeyVaultActions(root);
   bindDataManagementActions(root);
+  hydrateApiKeyVault(root);
 }
 
 function renderSettings() {

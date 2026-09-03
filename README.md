@@ -1,71 +1,40 @@
 # TSB Hub v0.13.9-security-hardening-20260831
 
+Release: `0.13.9-security-hardening-20260831`
+
 Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
-## Текущий релиз
+## Статус API keys
 
-- Release: `0.13.9-security-hardening-20260831`
-- Published: `2026-08-31T00:00:00+07:00`
-- Cache: `tsb-hub-0.13.9-security-hardening-20260831`
-- Finance schema: `3`
+API key provider-а вводится пользователем после установки приложения и хранится только локально на телефоне. Local vault использует IndexedDB для зашифрованного значения и non-extractable Web Crypto AES-GCM device key; raw key material нельзя экспортировать, а plaintext никогда не persistent.
 
-Запуск локально: открыть `index.html`. Для телефона загрузить папку на GitHub Pages и открыть через Chrome или установленное PWA.
+API key никогда не находится в repository или GitHub, build output/bundle, service-worker cache, app backup, state sync, D1 или server logs. Он не отправляется backend foundation.
 
-## Что входит в релиз
+Разрешённый local-only provider/preference — только `openai`, `anthropic` и `gemini`. Локальный выбор provider/model и vault реализованы; реальные provider API calls пока не реализованы.
 
-- Доработаны ползунки ежедневного отчёта:
-  - значения остаются дискретными: 0 / 25 / 50 / 75 / 100;
-  - подписи под шкалой выровнены под реальные положения бегунка;
-  - визуальное движение и заливка стали мягче.
-- Доработан блок «Незавершённое за прошлые дни»:
-  - основные действия теперь текстовые и понятные: «Выполнено» и «Перенести»;
-  - редкие действия спрятаны в меню «...»;
-  - внутри «...» находятся «Открыть день» и «Скрыть».
-- Добавлен выбор при выполнении пропущенной задачи:
-  - «В тот день» — задача закрывается в исходной дате;
-  - «Сегодня» — задача засчитывается на сегодня, но сохраняет исходную дату для будущей статистики.
-- Для пропущенных задач сохраняются технические поля `originalDate`, `completedAt`, `completedForDate`, `completionMode`.
-- Завершена финансовая система Finance v2/Part 3:
-  - отрицательный доступный баланс теперь не превращается в плюс после перерендера;
-  - ручная корректировка баланса остаётся обратимой через историю операций;
-  - блоки «Плановые поступления» и «Обязательные расходы» снова можно сворачивать;
-  - внутри этих блоков больше нет лишнего второго раскрытия списка.
-- Версия построена поверх предыдущей рабочей сборки, поэтому сохранены:
-  - компактная сводка «Сегодня»;
-  - ежедневный отчёт;
-  - живая финансовая система;
-  - кнопка-книжка для навигации;
-  - исправленный toast;
-  - сохранение раскрытых списков.
+Это не защита от активного same-origin XSS, скомпрометированного JavaScript или вредоносного устройства: приложение, работающее от имени пользователя, может вызвать decrypt. Пользователь принимает этот риск. Local vault снижает риск попадания ключа в GitHub/backup и затрудняет casual IndexedDB inspection, но не создаёт абсолютную границу секретности.
+
+## Backend foundation: статус
+
+В репозитории локально реализован backend foundation на Cloudflare Pages Functions, D1 и Cloudflare Access. Он ещё не создан и не развёрнут в облаке: нет созданных D1/Pages/Access ресурсов, production secrets или production deployment. Клиентское приложение пока не подключено к backend и continues to use `localStorage` для несекретных текущих данных.
+
+Server encrypted credential vault и `AI_CREDENTIAL_KEK` удалены из целевой модели. Ни один из них не является действующим механизмом.
+Backend foundation остаётся accounts/state only: local vault не deployed, client sync не connected.
+
+Реальных provider API calls и proxy пока нет. Возможный будущий вариант — direct CORS там, где provider это поддерживает, либо audited fixed-allowlist proxy: ключ передаётся transiently на один request и не сохраняется, не логируется и не попадает в cache. Это только будущий вариант, не реализованный контракт.
+
+Foundation включает same-origin server-side routes `/session`, `/auth/logout` и `/api/v1/state`; provider credential routes не являются способом хранения локального ключа. CORS deny-by-default, dynamic API/auth/session responses требуют `Cache-Control: no-store`, а cookie при возможном будущем использовании должна быть `Secure`, `HttpOnly`, `SameSite=Lax` или строже.
+
+Синхронизация backend foundation — whole-state optimistic concurrency с canonical schema/hash и практическим пределом тела 1 MiB. Auth authority — Cloudflare Access. Server audit status: provider proxy и новая credential-интеграция не аудированы; перед таким изменением требуется отдельный adversarial/security audit.
 
 ## Backup и импорт
 
-- Полный backup `tsb_data_YYYY-MM-DD.json` содержит нормализованный объект всей базы TSB Hub, включая финансовые коллекции и `meta`.
-- Импорт принимает только JSON-файл, повторно нормализует данные и перед заменой локальной базы показывает подтверждение.
-- Более старый backup импортируется только после отдельного подтверждения; исходный файл не изменяется.
-- Finance JSON и CSV операций — отдельные выгрузки. Finance JSON содержит `financeSchemaVersion`; CSV не является backup и не предназначен для обратного импорта.
-
-## Реализованные security safeguards
-
-- Строгая валидация backup перед импортом и полной заменой локальной базы.
-- XSS-safe идентификаторы и sinks для пользовательских данных.
-- Полный reset локальных данных с подтверждением и очисткой связанных состояний.
-- Защита CSV-выгрузки от spreadsheet formula injection.
-- CSP и security headers для статического приложения.
-- Service worker обходит будущие sensitive routes (`/api`, `/auth`, `/session`) и не кэширует их.
-- Security CI и ruleset-конфигурация для автоматических проверок.
-
 ## PWA shell и обязательные файлы
 
-PWA shell кэширует текущие `index.html`, `manifest.json`, CSS, JavaScript и иконки через `service-worker.js`. Версия в `version.json` должна совпадать с release в HTML, manifest, service worker и cache-buster query-параметрах.
+PWA shell кэширует только статические assets. Service worker обходит будущие sensitive routes (`/api`, `/auth`, `/session`) и не кэширует их. Обычный backup приложения не включает API key и не является способом его восстановления.
 
-Обязательные файлы: `index.html`, `manifest.json`, `version.json`, `service-worker.js`, `css/style.css`, `css/mobile-first-cleanup.css`, `css/mobile-dashboard.css`, `css/mobile-finance.css`, `css/confirm-dialog.css`, `js/update-manager.js`, `js/finance-core.js`, `js/app.js`, `js/mobile-first-cleanup.js`, `js/mobile-dashboard.js`, `icons/icon-192.png`, `icons/icon-512.png`.
+## Перед развёртыванием
+
+Создать отдельные preview/production D1 resources только для accounts/state, применить существующие state migrations `0001`, затем `0002`, настроить Access team/AUD/origin и secrets через Cloudflare, развернуть preview и провести server adversarial audit. Не добавлять credential KEK или provider migrations. Только после отдельного аудита допускаются client integration и production deployment. Реальные ID и secrets не должны появляться в репозитории.
 
 Проверка: `npm test`, `npm run lint`, `npm run build` (или bundled Node из инструкции релиза).
-
-## Важно
-
-- Backend не добавлялся.
-- localStorage-ключ не менялся.
-- Структура проекта сохранена.
-- PWA/GitHub Pages схема сохранена.

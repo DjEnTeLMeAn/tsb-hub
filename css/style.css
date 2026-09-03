@@ -740,6 +740,9 @@ body[data-active-tab="important"] .side-panel section:nth-child(2) {
 }
 
 .settings-grid { display: grid; gap: 12px; }
+.api-key-vault-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.api-key-vault-actions button { min-width: 120px; min-height: 44px; }
+.api-key-vault-card input[type="password"], .api-key-vault-card input[type="text"], .api-key-vault-card select { width: 100%; min-height: 44px; box-sizing: border-box; }
 .setting-row {
   display: grid;
   gap: 6px;

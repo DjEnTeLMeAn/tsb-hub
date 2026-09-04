@@ -37,13 +37,13 @@ test('concurrent saves share one persisted non-extractable key and decrypt indep
 
 test('ciphertext is at rest, tampering fails closed, providers are isolated, and metadata is deterministic', async () => {
   const { vault, indexedDB } = load();
-  await vault.saveKey('gemini', 'gemini-secret-789'); await vault.saveKey('openai', 'openai-secret-123');
+  await vault.saveKey('gemini', 'gemini-secret-789'); await vault.saveKey('qwen', 'qwen-secret-789'); await vault.saveKey('openai', 'openai-secret-123');
   const rows = indexedDB.data.get('records');
   for (const row of rows.values()) { assert.equal('gemini-secret-789' in row, false); assert.equal('openai-secret-123' in row, false); }
-  assert.deepEqual((await vault.listKeys()).map(row => row.provider), ['openai', 'gemini']);
+  assert.deepEqual((await vault.listKeys()).map(row => row.provider), ['openai', 'gemini', 'qwen']);
   const row = rows.get('openai'); const originalIv = row.iv; row.iv = new Uint8Array(12).buffer; await assert.rejects(vault.readKey('openai'));
   row.iv = originalIv; row.ciphertext = new Uint8Array(row.ciphertext).map((x, i) => i ? x : x ^ 1).buffer; await assert.rejects(vault.readKey('openai'));
-  assert.equal(await vault.hasKey('anthropic'), false);
+  assert.equal(await vault.hasKey('anthropic'), false); assert.equal(await vault.readKey('qwen'), 'qwen-secret-789');
 });
 
 test('preferences, delete, and storage boundaries are explicit', async () => {
@@ -57,5 +57,5 @@ test('preferences, delete, and storage boundaries are explicit', async () => {
 test('UI never hydrates the secret into DOM or backup state', () => {
   const vaultUi = appSource.slice(appSource.indexOf('function renderApiKeyVaultHTML'), appSource.indexOf('function renderApiKeyVaultHTML') + 9000);
   assert.doesNotMatch(vaultUi, /readKey\s*\(/); assert.doesNotMatch(vaultUi, /apiKey.*(?:backup|app\.)/i);
-  assert.match(vaultUi, /input\.value\s*=\s*''/); assert.match(vaultUi, /type="password"/);
+  assert.match(vaultUi, /input\.value\s*=\s*''/); assert.match(vaultUi, /type="password"/); assert.match(vaultUi, /Qwen/); assert.match(vaultUi, /Food photo поддерживает Gemini и Qwen/);
 });

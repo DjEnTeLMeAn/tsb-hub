@@ -1,7 +1,7 @@
-// TSB Hub v0.14.0-food-photo-ai-20260904 — single PWA update authority.
+// TSB Hub v0.14.1-qwen-food-ai-20260904 — single PWA update authority.
 (function(){
   'use strict';
-  const RELEASE='0.14.0-food-photo-ai-20260904';
+  const RELEASE='0.14.1-qwen-food-ai-20260904';
   const VERSION_URL='./version.json';
   const RELEASE_PATTERN=/^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-z0-9]+(?:-[a-z0-9]+)*)?$/i;
   const MAX_RELEASE_LENGTH=128;

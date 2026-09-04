@@ -3,8 +3,10 @@
   const ORIGIN = 'https://generativelanguage.googleapis.com';
   const DEFAULT_MODEL = 'gemini-3.8-flash';
   const MAX_SOURCE = 10 * 1024 * 1024;
-  const MAX_IMAGE = 4 * 1024 * 1024;
+  const MAX_IMAGE = 3 * 1024 * 1024;
   const MAX_REQUEST = 6 * 1024 * 1024;
+  const MAX_DIMENSION = 1280;
+  const JPEG_QUALITY = 0.78;
   const MAX_RESPONSE = 512 * 1024;
   const TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
   const FIELDS = ['name','ingredients','portionGrams','volumeMl','calories','protein','fat','carbs','comment','confidence'];
@@ -46,7 +48,7 @@
     try {
       bitmap = await global.createImageBitmap(file);
       if (!Number.isFinite(bitmap.width) || !Number.isFinite(bitmap.height) || bitmap.width <= 0 || bitmap.height <= 0) throw fail('INVALID_IMAGE', 'Некорректные размеры фото.');
-      const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+      const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
       const canvas = global.document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(bitmap.width * scale));
       canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -56,7 +58,7 @@
       const output = await new Promise((resolve, reject) => {
         try {
           canvas.toBlob(blob => !blob ? reject(fail('INVALID_IMAGE', 'Не удалось подготовить фото.'))
-            : blob.size > MAX_IMAGE ? reject(fail('IMAGE_TOO_LARGE', 'Подготовленное фото слишком велико.')) : resolve(blob), 'image/jpeg', 0.82);
+            : blob.size > MAX_IMAGE ? reject(fail('IMAGE_TOO_LARGE', 'Подготовленное фото слишком велико.')) : resolve(blob), 'image/jpeg', JPEG_QUALITY);
         } catch (error) { reject(fail('INVALID_IMAGE', 'Не удалось подготовить фото.')); }
       });
       return { mimeType: 'image/jpeg', data: await blobBase64(output) };
@@ -152,7 +154,7 @@
     let timedOut = false;
     const abort = () => controller.abort();
     options.signal?.addEventListener('abort', abort, { once: true });
-    const timer = global.setTimeout(() => { timedOut = true; controller.abort(); }, 45000);
+    const timer = global.setTimeout(() => { timedOut = true; controller.abort(); }, 20000);
     try {
       const response = await global.fetch(`${ORIGIN}/v1beta/models/${model}:generateContent`, {
         method:'POST', headers:{'Content-Type':'application/json','x-goog-api-key':apiKey},

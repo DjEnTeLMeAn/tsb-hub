@@ -10,9 +10,8 @@ test('Food AI UI exposes camera and gallery inputs', () => {
   assert.match(app, /data-food-ai-input="gallery"[^>]*type="file"[^>]*accept="image\/jpeg,image\/png,image\/webp"/);
   assert.match(app, /data-food-ai-camera/); assert.match(app, /data-food-ai-gallery/);
 });
-test('uses vault immediately before Gemini client call without persistence', () => {
-  assert.match(app, /TSBApiKeyVault\.readKey\('gemini'\)/); assert.match(app, /TSBFoodAIClient\.analyzeFoodPhoto/);
-  assert.match(app, /model:foodGeminiModel\(model\)/); assert.doesNotMatch(app, /analyzeFoodPhoto\(\{[^}]*model,signal/);
+test('uses vault immediately before selected Food provider call without persistence', () => {
+  assert.match(app, /TSBApiKeyVault\.readKey\(provider\)/); assert.match(app, /provider==='qwen'\s*\?\s*window\.TSBQwenFoodAIClient\s*:\s*window\.TSBFoodAIClient/); assert.match(app, /client\.analyzeFoodPhoto/); assert.match(app, /TSBQwenFoodAIClient/); assert.match(app, /foodQwenModel/); assert.match(app, /qwen3\.8-flash/); assert.match(app, /foodModel\(provider/); assert.doesNotMatch(app, /analyzeFoodPhoto\(\{[^}]*model,signal/);
   assert.doesNotMatch(app, /localStorage[\s\S]{0,300}apiKey/); assert.doesNotMatch(app, /Добавлено через AI demo/);
   assert.match(app, /finally\s*\{[\s\S]*input\.value='';/);
 });

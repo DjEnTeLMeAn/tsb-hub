@@ -10,6 +10,8 @@ const confirmDialogCss=fs.readFileSync('css/confirm-dialog.css','utf8');
 assert.ok(index.indexOf('js/finance-core.js')<index.indexOf('js/app.js'),'finance core must load before app');
 assert.ok(index.indexOf('js/api-key-vault.js')<index.indexOf('js/app.js'),'API key vault must load before app');
 assert.ok(index.indexOf('js/food-ai-client.js')<index.indexOf('js/app.js'),'food AI client must load before app');
+assert.ok(index.indexOf('js/qwen-food-ai-client.js')<index.indexOf('js/app.js'),'Qwen food AI client must load before app');
+assert.ok(fs.existsSync('js/qwen-food-ai-client.js'),'Qwen food AI client missing');
 assert.ok(fs.existsSync('js/food-ai-client.js'),'food AI client missing');
 assert.ok(!app.slice(app.indexOf('function buildFullBackupObject()'), app.indexOf('function buildFullBackupObject()') + 2000).match(/apiKey|ciphertext|selectedProvider|selectedModel/),'backup must not link to private vault');
 assert.ok(app.includes('migrateLegacyState'),'app must invoke Finance v2 migration');
@@ -53,6 +55,7 @@ const sw=fs.readFileSync('service-worker.js','utf8');
 assert.ok(sw.includes('js/finance-core.js'),'service worker must cache finance core');
 assert.ok(sw.includes('js/api-key-vault.js'),'service worker must cache API key vault');
 assert.ok(sw.includes('js/food-ai-client.js'),'service worker must cache food AI client');
+assert.ok(sw.includes('js/qwen-food-ai-client.js'),'service worker must cache Qwen food AI client');
 assert.equal(sw.includes('finance-module-v1.js'),false,'service worker still references Finance v1');
 assert.equal(fs.existsSync('js/finance-module-v1.js'),false,'Finance v1 file must be removed');
 

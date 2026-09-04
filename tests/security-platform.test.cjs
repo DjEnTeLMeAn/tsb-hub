@@ -13,7 +13,7 @@ const sw = read('service-worker.js');
 const bootstrap = read('js/bootstrap.js');
 const gitignore = read('.gitignore');
 
-const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'";
+const expectedCsp = "default-src 'self'; script-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://dashscope-intl.aliyuncs.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-src 'none'; worker-src 'self'; manifest-src 'self'";
 
 test('index has the exact restrictive CSP and only external scripts', () => {
   const csp = index.match(/<meta http-equiv="Content-Security-Policy" content="([^"]+)"\s*\/>/i)?.[1];
@@ -34,6 +34,7 @@ test('service worker uses the version.json release for cache identity and shell 
   assert.ok(sw.includes('const CACHE_NAME=`tsb-hub-${RELEASE}`'));
   assert.ok(sw.includes('`./index.html?v=${RELEASE}`'));
   assert.ok(sw.includes('`./js/bootstrap.js?v=${RELEASE}`'));
+  assert.ok(sw.includes('`./js/qwen-food-ai-client.js?v=${RELEASE}`'));
 });
 
 test('sensitive same-origin paths bypass the service worker before cache branches', () => {

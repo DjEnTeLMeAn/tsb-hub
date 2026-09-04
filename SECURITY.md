@@ -4,9 +4,11 @@
 
 The provider API key is entered by the user after installation and is local-only on the phone. The local vault stores only an encrypted value in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext exists only transiently in memory while needed; plaintext is never persistent.
 
-The key must never be present in the repository, GitHub, build output or client bundle, service-worker cache, app backup, state sync, D1, or server logs. It is not sent to the backend foundation. Gemini is implemented only for Food photo, via a direct browser request; OpenAI and Anthropic are not implemented. Plaintext is transiently present only in the direct request header. The selected photo is sent to Google Gemini; key, photo, and response are not backed up, synced, cached by the service worker, or logged by the server. Results are approximate and require confirmation; CORS and Gemini platform/free-tier limits apply.
+The key must never be present in the repository, GitHub, build output or client bundle, service-worker cache, app backup, state sync, D1, or server logs. It is not sent to the backend foundation. Gemini and Qwen Food photo are implemented via direct browser requests; OpenAI and Anthropic are not implemented. Keys remain local, and a photo is sent only after the user selects the provider. Direct client API calls carry CORS and billing/usage-limit risks; no backend provider proxy is implemented.
 
 The old server encrypted credential vault and `AI_CREDENTIAL_KEK` are removed. D1 remains accounts/state only; no server credential vault, provider-key storage, credential KEK, or provider credential migration is part of this contract.
+
+Nutrition values (mass, calories, and macros) are approximate. The user must review, correct if needed, and confirm them before saving; this is not medical advice.
 
 ## Honest threat model
 
@@ -14,7 +16,7 @@ This design protects against accidental placement in GitHub and backups and make
 
 ## Backend foundation status
 
-The Cloudflare Pages Functions/D1/Access backend foundation is implemented locally but not provisioned or deployed; the client sync is not connected and local vault is not deployed. The foundation is accounts/state only. There is no provider proxy; the only provider call is direct Gemini Food photo analysis.
+The Cloudflare Pages Functions/D1/Access backend foundation is implemented locally but not provisioned or deployed; the client sync is not connected and local vault is not deployed. The foundation is accounts/state only. There is no provider proxy; Gemini and Qwen Food photo analysis are direct browser calls.
 
 Any future implementation must be explicitly audited: direct CORS where supported, or an audited fixed-allowlist proxy that receives the key transiently per request and never stores, logs, or caches it. This is a future option, not an implemented feature. A new proxy requires a separate server security audit.
 

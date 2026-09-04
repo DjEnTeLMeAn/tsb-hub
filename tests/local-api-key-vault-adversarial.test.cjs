@@ -43,14 +43,14 @@ const rejectsClosed = promise => assert.rejects(promise, /Private vault|Vault|ab
 
 test('first-save race creates exactly one device key and never substitutes an extractable key', async () => {
   const { vault, indexedDB } = load();
-  await Promise.all(['openai', 'anthropic', 'gemini'].map((p, i) => vault.saveKey(p, `${p}-secret-${i}123`)));
+  await Promise.all(['openai', 'anthropic', 'gemini', 'qwen'].map((p, i) => vault.saveKey(p, `${p}-secret-${i}123`)));
   assert.equal(indexedDB.data.get('keyring').size, 1);
   const key = [...indexedDB.data.get('keyring').values()][0].key;
   assert.equal(key.type, 'secret'); assert.equal(key.extractable, false);
   await assert.rejects(webcrypto.subtle.exportKey('raw', key));
   const persistedText = JSON.stringify([...indexedDB.data.values()].map(store => [...store.values()]));
-  for (const secret of ['openai-secret-0123', 'anthropic-secret-1123', 'gemini-secret-2123']) assert.equal(persistedText.includes(secret), false);
-  for (const p of ['openai', 'anthropic', 'gemini']) assert.equal(await vault.readKey(p), `${p}-secret-${['openai','anthropic','gemini'].indexOf(p)}123`);
+  for (const secret of ['openai-secret-0123', 'anthropic-secret-1123', 'gemini-secret-2123', 'qwen-secret-3123']) assert.equal(persistedText.includes(secret), false);
+  for (const p of ['openai', 'anthropic', 'gemini', 'qwen']) assert.equal(await vault.readKey(p), `${p}-secret-${['openai','anthropic','gemini','qwen'].indexOf(p)}123`);
 });
 
 test('ciphertext, IV, and provider transfer all fail closed; malformed rows are never accepted', async () => {

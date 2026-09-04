@@ -5,7 +5,7 @@
   const DB_VERSION = 1;
   const SCHEMA = 'tsb-hub-private-vault-v1';
   const KEYRING_ID = 'device-encryption-key';
-  const PROVIDERS = Object.freeze(['openai', 'anthropic', 'gemini']);
+  const PROVIDERS = Object.freeze(['openai', 'anthropic', 'gemini', 'qwen']);
   const STORES = Object.freeze({ records: 'records', keyring: 'keyring', preferences: 'preferences' });
   const subtle = global.crypto?.subtle;
   const encoder = typeof global.TextEncoder === 'function' ? new global.TextEncoder() : null;

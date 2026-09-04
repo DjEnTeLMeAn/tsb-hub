@@ -6,10 +6,12 @@ The backend foundation is implemented locally with Pages Functions, D1, and Clou
 
 After installation, the user enters the provider API key on the phone. The local vault stores an encrypted value in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext is memory-only and never persistent. The key is excluded from repository/GitHub, builds and bundles, service-worker cache, app backup, state sync, D1, and server logs.
 
-Gemini is implemented only for Food photo through a direct browser call. OpenAI and Anthropic are not implemented. The key is local; plaintext is transiently placed only in the direct request header. After the user selects a photo, it is sent to Google Gemini. Key, photo, and response are excluded from backup/sync, service-worker cache, and server logs. Nutrition estimates are approximate and require confirmation; CORS and Gemini platform/free-tier limits apply.
+Gemini and Qwen Food photo are implemented through direct browser calls. OpenAI and Anthropic are not implemented. Keys are local; the photo is sent only to the provider selected by the user. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
 The removed server encrypted credential vault and `AI_CREDENTIAL_KEK` are absent from the target model and are not accepted by this contract.
 
-There is no provider proxy route. The only provider call is direct Gemini Food photo analysis from the shell, subject to provider CORS and platform/free-tier limits. No key query parameter is used and the service worker does not cache the cross-origin request or response.
+Nutrition values (mass, calories, and macros) are approximate. The user must review, correct if needed, and confirm them before saving; this is not medical advice.
+
+There is no provider proxy route. Provider calls are direct Gemini or Qwen Food photo analysis from the shell, subject to provider CORS and platform/free-tier limits. No key query parameter is used and the service worker does not cache or intercept cross-origin requests or responses.
 
 The threat model covers GitHub/backup exposure and casual IndexedDB inspection. It does not cover active same-origin XSS, compromised JavaScript, or a malicious device: app code can call decrypt. The user accepts this limitation.
 

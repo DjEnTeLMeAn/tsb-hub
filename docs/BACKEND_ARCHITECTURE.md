@@ -6,9 +6,11 @@ The repository contains a locally implemented Cloudflare Pages Functions + D1 + 
 
 The provider API key is entered after installation and stays on the phone. The vault stores only encrypted data in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext may exist transiently in memory during use, but is never persistent. No key is in repository/GitHub, build output/bundle, service-worker cache, app backup, state sync, D1, or server logs.
 
-Gemini is implemented only for Food photo via a direct browser request. OpenAI and Anthropic are not implemented. The key remains local and plaintext is transiently present only in the direct request header; photo, key, and response do not enter backup, sync, service-worker cache, or server logs. Nutrition output is approximate and requires confirmation. CORS and Gemini platform/free-tier limits apply.
+Gemini and Qwen Food photo are implemented via direct browser requests. OpenAI and Anthropic are not implemented. Keys remain local, and the photo is sent to the selected provider only after explicit provider selection. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
 
 The legacy server encrypted credential vault was removed. `AI_CREDENTIAL_KEK` was removed too. The legacy label “encrypted per-user AI provider vault” is historical only. There is no server-side provider-key storage.
+
+Nutrition values (mass, calories, and macros) are approximate. The user must review, correct if needed, and confirm them before saving; this is not medical advice.
 
 ## Authority and response invariants
 

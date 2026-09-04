@@ -11,7 +11,7 @@ test('Food AI UI exposes camera and gallery inputs', () => {
   assert.match(app, /data-food-ai-camera/); assert.match(app, /data-food-ai-gallery/);
 });
 test('uses vault immediately before selected Food provider call without persistence', () => {
-  assert.match(app, /TSBApiKeyVault\.readKey\(provider\)/); assert.match(app, /provider==='qwen'\s*\?\s*window\.TSBQwenFoodAIClient\s*:\s*window\.TSBFoodAIClient/); assert.match(app, /client\.analyzeFoodPhoto/); assert.match(app, /TSBQwenFoodAIClient/); assert.match(app, /foodQwenModel/); assert.match(app, /qwen3\.8-flash/); assert.match(app, /foodModel\(provider/); assert.doesNotMatch(app, /analyzeFoodPhoto\(\{[^}]*model,signal/);
+  assert.match(app, /TSBApiKeyVault\.readKey\(provider\)/); assert.match(app, /provider==='openai'\s*\?\s*window\.TSBOpenAIFoodAIClient\s*:\s*window\.TSBFoodAIClient/); assert.match(app, /client\.analyzeFoodPhoto/); assert.match(app, /TSBOpenAIFoodAIClient/); assert.match(app, /gpt-5\.6-luna/); assert.doesNotMatch(app, /<option value="qwen"/); assert.doesNotMatch(app, /TSBQwenFoodAIClient/); assert.match(app, /foodModel\(provider/); assert.doesNotMatch(app, /analyzeFoodPhoto\(\{[^}]*model,signal/);
   assert.doesNotMatch(app, /localStorage[\s\S]{0,300}apiKey/); assert.doesNotMatch(app, /Добавлено через AI demo/);
   assert.match(app, /finally\s*\{[\s\S]*input\.value='';/);
 });
@@ -27,4 +27,15 @@ test('supports cancellation, stale completion and editable confirmed save', () =
 test('maps provider and service errors to human-readable messages', () => {
   for (const code of ['NO_KEY','AUTH','QUOTA','NETWORK','TIMEOUT','INVALID_RESPONSE','INVALID_IMAGE','IMAGE_TOO_LARGE','API','ABORTED']) assert.match(app, new RegExp(code));
   assert.match(app, /Выбранный провайдер пока не поддерживается/);
+});
+
+test('migrates legacy Qwen preference and synchronizes the model field', () => {
+  assert.match(app, /normalizeApiKeyProvider\(provider\)/);
+  assert.match(app, /storedProvider !== provider/);
+  assert.match(app, /setPreference\('selectedProvider', provider\)/);
+  assert.match(app, /storedProvider.*selectedProvider/);
+  assert.match(app, /provider === 'openai' \? 'gpt-5\.6-luna'/);
+  assert.match(app, /model === 'qwen3\.8-flash' \? ''/);
+  assert.match(app, /modelInput\.readOnly = normalized === 'openai'/);
+  assert.match(app, /syncApiKeyModelField\(provider, modelInput, ''\)/);
 });

@@ -1,6 +1,6 @@
-# TSB Hub v0.14.1-qwen-food-ai-20260904
+# TSB Hub v0.14.2-openai-luna-food-ai-20260904
 
-Release: `0.14.1-qwen-food-ai-20260904`
+Release: `0.14.2-openai-luna-food-ai-20260904`
 
 Персональное оффлайн PWA-приложение для задач, питания, финансов, важных дат и отчётов для GPT. Текущий релиз и cache-buster берутся из `version.json`.
 
@@ -10,7 +10,7 @@ API key provider-а вводится пользователем после ус�
 
 API key никогда не находится в repository или GitHub, build output/bundle, service-worker cache, app backup, state sync, D1 или server logs. Он не отправляется backend foundation.
 
-Gemini и Qwen Food photo реализованы через прямой browser API после выбора пользователем provider и фото: Google `generativelanguage.googleapis.com` или Qwen `dashscope-intl.aliyuncs.com`. OpenAI и Anthropic не реализованы. Ключи локальные; фото отправляется только выбранному provider. Прямые client API несут риски CORS и billing/лимитов провайдера.
+OpenAI и Gemini Food photo реализованы через прямой browser API после выбора пользователем provider и фото: Google `generativelanguage.googleapis.com` или OpenAI `api.openai.com`. Для OpenAI используется exact-модель `gpt-5.6-luna`, модель не вводится пользователем. Anthropic не реализован, Qwen недоступен в UI и рабочем dispatch. Ключи локальные; фото отправляется только выбранному provider. Прямые client API несут риски CORS и billing/лимитов провайдера.
 Распознанные масса, калории и БЖУ являются приблизительной оценкой: пользователь обязан проверить и при необходимости исправить их, затем подтвердить перед сохранением. Это не медицинская рекомендация.
 
 Это не защита от активного same-origin XSS, скомпрометированного JavaScript или вредоносного устройства: приложение, работающее от имени пользователя, может вызвать decrypt. Пользователь принимает этот риск. Local vault снижает риск попадания ключа в GitHub/backup и затрудняет casual IndexedDB inspection, но не создаёт абсолютную границу секретности.
@@ -22,7 +22,7 @@ Gemini и Qwen Food photo реализованы через прямой browser
 Server encrypted credential vault и `AI_CREDENTIAL_KEK` удалены из целевой модели. Ни один из них не является действующим механизмом.
 Backend foundation остаётся accounts/state only: local vault не deployed, client sync не connected.
 
-Backend provider proxy отсутствует и не реализован: Gemini и Qwen Food photo работают только напрямую из браузера. Ключи, фото и ответы не попадают в backup/sync, service-worker cache или server logs.
+Backend provider proxy отсутствует и не реализован: OpenAI и Gemini Food photo работают только напрямую из браузера. Ключи, фото и ответы не попадают в backup/sync, service-worker cache или server logs.
 
 Foundation включает same-origin server-side routes `/session`, `/auth/logout` и `/api/v1/state`; provider credential routes не являются способом хранения локального ключа. CORS deny-by-default, dynamic API/auth/session responses требуют `Cache-Control: no-store`, а cookie при возможном будущем использовании должна быть `Secure`, `HttpOnly`, `SameSite=Lax` или строже.
 

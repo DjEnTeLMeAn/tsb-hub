@@ -1,4 +1,4 @@
-const RELEASE='0.14.1-qwen-food-ai-20260904';
+const RELEASE='0.14.2-openai-luna-food-ai-20260904';
 const CACHE_NAME=`tsb-hub-${RELEASE}`;
 const APP_SHELL=[
   `./index.html?v=${RELEASE}`,
@@ -14,7 +14,7 @@ const APP_SHELL=[
   `./js/storage.js?v=${RELEASE}`,
   `./js/api-key-vault.js?v=${RELEASE}`,
   `./js/food-ai-client.js?v=${RELEASE}`,
-  `./js/qwen-food-ai-client.js?v=${RELEASE}`,
+  `./js/openai-food-ai-client.js?v=${RELEASE}`,
   `./js/app.js?v=${RELEASE}`,
   `./js/mobile-first-cleanup.js?v=${RELEASE}`,
   `./js/mobile-dashboard.js?v=${RELEASE}`,

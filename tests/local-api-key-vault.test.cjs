@@ -57,5 +57,5 @@ test('preferences, delete, and storage boundaries are explicit', async () => {
 test('UI never hydrates the secret into DOM or backup state', () => {
   const vaultUi = appSource.slice(appSource.indexOf('function renderApiKeyVaultHTML'), appSource.indexOf('function renderApiKeyVaultHTML') + 9000);
   assert.doesNotMatch(vaultUi, /readKey\s*\(/); assert.doesNotMatch(vaultUi, /apiKey.*(?:backup|app\.)/i);
-  assert.match(vaultUi, /input\.value\s*=\s*''/); assert.match(vaultUi, /type="password"/); assert.match(vaultUi, /Qwen/); assert.match(vaultUi, /Food photo поддерживает Gemini и Qwen/);
+  assert.match(vaultUi, /input\.value\s*=\s*''/); assert.match(vaultUi, /type="password"/); assert.match(vaultUi, /OpenAI/); assert.match(vaultUi, /gpt-5\.6-luna/); assert.match(vaultUi, /Food photo поддерживает Gemini и OpenAI/); assert.doesNotMatch(vaultUi, /<option value="qwen"/);
 });

@@ -6,12 +6,12 @@ The backend foundation is implemented locally with Pages Functions, D1, and Clou
 
 After installation, the user enters the provider API key on the phone. The local vault stores an encrypted value in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext is memory-only and never persistent. The key is excluded from repository/GitHub, builds and bundles, service-worker cache, app backup, state sync, D1, and server logs.
 
-Gemini and Qwen Food photo are implemented through direct browser calls. OpenAI and Anthropic are not implemented. Keys are local; the photo is sent only to the provider selected by the user. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
+OpenAI and Gemini Food photo are implemented through direct browser calls. Anthropic is not implemented. Keys are local; the photo is sent only to the provider selected by the user. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
 The removed server encrypted credential vault and `AI_CREDENTIAL_KEK` are absent from the target model and are not accepted by this contract.
 
 Nutrition values (mass, calories, and macros) are approximate. The user must review, correct if needed, and confirm them before saving; this is not medical advice.
 
-There is no provider proxy route. Provider calls are direct Gemini or Qwen Food photo analysis from the shell, subject to provider CORS and platform/free-tier limits. No key query parameter is used and the service worker does not cache or intercept cross-origin requests or responses.
+There is no provider proxy route. Provider calls are direct Gemini or OpenAI and Gemini Food photo analysis from the shell, subject to provider CORS and platform/free-tier limits. No key query parameter is used and the service worker does not cache or intercept cross-origin requests or responses.
 
 The threat model covers GitHub/backup exposure and casual IndexedDB inspection. It does not cover active same-origin XSS, compromised JavaScript, or a malicious device: app code can call decrypt. The user accepts this limitation.
 

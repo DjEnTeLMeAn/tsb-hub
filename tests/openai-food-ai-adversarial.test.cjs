@@ -1,0 +1,3 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const src=fs.readFileSync(path.join(__dirname,'../js/openai-food-ai-client.js'),'utf8');
+test('OpenAI adapter security invariants',()=>{assert.doesNotMatch(src,/baseURL|workspace|console\.(log|error)/);assert.match(src,/ORIGIN\s*=\s*['"]https:\/\/api\.openai\.com['"]/);assert.match(src,/ENDPOINT\s*=\s*ORIGIN\s*\+\s*['"]\/v1\/responses['"]/);assert.match(src,/Authorization:'Bearer '\+k/);assert.match(src,/gpt-5\.6-luna/);assert.match(src,/effort:'low'/);assert.match(src,/MAX_RESPONSE=512\*1024/);assert.match(src,/MAX_REQUEST=6\*1024\*1024/);assert.match(src,/MAX_SOURCE=10\*1024\*1024/);assert.match(src,/MAX_PREPARED=3\*1024\*1024/);});

@@ -11,14 +11,12 @@ const index = read('index.html');
 const headers = read('_headers');
 const sw = read('service-worker.js');
 
-test('Qwen integration has one fixed provider origin and one fixed model', () => {
+test('Dormant Qwen adapter has one fixed provider origin and one fixed model', () => {
   assert.match(qwen, /const ORIGIN = 'https:\/\/dashscope-intl\.aliyuncs\.com'/);
   assert.match(qwen, /const DEFAULT_MODEL = 'qwen3\.8-flash'/);
   assert.match(qwen, /o\.model!==undefined&&o\.model!==DEFAULT_MODEL/);
   assert.doesNotMatch(qwen, /(?:baseURL|origin|endpoint)\s*=\s*o\./i);
   assert.match(qwen, /model:DEFAULT_MODEL/);
-  assert.match(app, /provider==='qwen'\s*\?\s*window\.TSBQwenFoodAIClient/);
-  assert.match(app, /foodQwenModel\(value\)[\s\S]{0,180}model === 'qwen3\.8-flash'/);
 });
 
 test('Qwen key is never transported outside the Authorization header', () => {
@@ -71,10 +69,18 @@ test('editable result is explicitly confirmed and saved exactly once', () => {
   assert.ok(saveHandler.indexOf('getHealth().meals.push(') < saveHandler.indexOf("ai.status='saved'"));
 });
 
-test('release shell and service worker allow only the fixed Qwen API', () => {
-  assert.match(index, /js\/qwen-food-ai-client\.js\?v=/);
-  assert.match(sw, /js\/qwen-food-ai-client\.js\?v=\$\{RELEASE\}/);
+test('Qwen remains dormant while OpenAI Luna is integrated', () => {
+  assert.doesNotMatch(index, /js\/qwen-food-ai-client\.js\?v=/);
+  assert.doesNotMatch(sw, /js\/qwen-food-ai-client\.js\?v=\$\{RELEASE\}/);
+  assert.match(index, /js\/openai-food-ai-client\.js\?v=/);
+  assert.match(sw, /js\/openai-food-ai-client\.js\?v=\$\{RELEASE\}/);
   assert.match(sw, /url\.origin!==self\.location\.origin\)return/);
-  assert.match(index, /connect-src 'self' https:\/\/generativelanguage\.googleapis\.com https:\/\/dashscope-intl\.aliyuncs\.com/);
-  assert.match(headers, /connect-src 'self' https:\/\/generativelanguage\.googleapis\.com https:\/\/dashscope-intl\.aliyuncs\.com/);
+  assert.match(index, /connect-src 'self' https:\/\/generativelanguage\.googleapis\.com https:\/\/api\.openai\.com/);
+  assert.match(headers, /connect-src 'self' https:\/\/generativelanguage\.googleapis\.com https:\/\/api\.openai\.com/);
+  assert.doesNotMatch(index, /dashscope-intl\.aliyuncs\.com|qwen/i);
+  assert.doesNotMatch(sw, /dashscope-intl\.aliyuncs\.com|qwen-food-ai-client/i);
+  assert.doesNotMatch(app, /TSBQwenFoodAIClient|provider==='qwen'/);
+  assert.doesNotMatch(app, /<option value="qwen"/);
+  assert.match(app, /window\.TSBOpenAIFoodAIClient/);
+  assert.match(app, /gpt-5\.6-luna/);
 });

@@ -43,7 +43,7 @@ test('architecture documents required invariants and contracts', () => {
   for (const term of ['Cloudflare Access is the account authority', 'no application', 'signature', 'issuer (`iss`)', 'audience', 'expiry', 'IDOR', 'exact allowlisted `Origin`', 'HMAC CSRF', 'GET /session` returns', 'validated', 'no-store', 'optimistic concurrency', 'whole-state', 'server-side proxy', 'arbitrary base URL', 'SSRF', 'IndexedDB', 'backup bombs', 'log leaks', 'Secret rotation', '`GET /session`', '`GET /api/v1/state`', '`PUT /api/v1/state`', 'credential', 'migrations', 'Cloudflare Access team', 'application AUD', 'wrangler secret put', 'deploy preview', 'verified configuration for production', 'client remains disconnected']) {
     assert.match(s, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), term);
   }
-  assert.match(s, /Gemini and Qwen Food photo are implemented via direct browser requests[\s\S]*Keys remain local[\s\S]*photo is sent to the selected provider/i);
+  assert.match(s, /OpenAI and Gemini Food photo are implemented via direct browser requests[\s\S]*Keys remain local[\s\S]*photo is sent to the selected provider/i);
   assert.match(s, /backend provider proxy is not implemented/i);
   assert.match(s, /local vault[\s\S]*IndexedDB/i);
   assert.doesNotMatch(s, /\/api\/v1\/preferences/i);

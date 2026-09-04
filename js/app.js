@@ -1760,8 +1760,7 @@ function foodAmount(result) { const grams = foodNumber(result.portionGrams); con
 function foodAiDraft(result) { return { ...result, ingredients: foodIngredientsText(result.ingredients), amount: result.amount || foodAmount(result), portionGrams: result.portionGrams ?? '', volumeMl: result.volumeMl ?? '' }; }
 function foodConfidence(value) { const n=Number(value); return Number.isFinite(n) && n >= 0 && n <= 1 ? `${Math.round(n*100)}%` : String(value ?? '—'); }
 function foodGeminiModel(value) { const model = String(value || '').trim(); return /^gemini-[A-Za-z0-9._-]{1,55}$/.test(model) ? model : ''; }
-function foodQwenModel(value) { const model = String(value || '').trim(); return model === 'qwen3.8-flash' ? model : ''; }
-function foodModel(provider, value) { return provider === 'qwen' ? (foodQwenModel(value) || 'qwen3.8-flash') : foodGeminiModel(value); }
+function foodModel(provider, value) { return provider === 'openai' ? 'gpt-5.6-luna' : foodGeminiModel(value); }
 function foodStrictNumber(value, optional = false) { const text=String(value ?? '').trim(); if(!text) return optional ? 0 : NaN; const number=Number(text.replace(',', '.')); return Number.isFinite(number) ? number : NaN; }
 
 function renderFoodAiCard() {
@@ -1799,7 +1798,7 @@ function renderFood() {
   $('[data-food-ai-settings]', root)?.addEventListener('click', () => setTab('settings'));
   $$('[data-food-ai-input]', root).forEach(input => input.addEventListener('change', async () => {
     const file=input.files?.[0]; input.value=''; if(!file)return; const ai=getFoodAiState(); const requestId=Symbol('food-ai'); ai.requestId=requestId; ai.controller=new AbortController(); ai.status='analysing'; renderFood();
-try { const provider=window.TSBApiKeyVault ? await TSBApiKeyVault.getPreference('selectedProvider') || 'gemini' : 'gemini'; const selectedModel=window.TSBApiKeyVault ? await TSBApiKeyVault.getPreference('selectedModel') || '' : ''; if(!['gemini','qwen'].includes(provider)) throw new Error('UNSUPPORTED_PROVIDER'); if(!window.TSBApiKeyVault) throw new Error('NO_KEY'); if(!await TSBApiKeyVault.hasKey(provider)) throw new Error('NO_KEY'); const client=provider==='qwen' ? window.TSBQwenFoodAIClient : window.TSBFoodAIClient; if(!client || typeof client.analyzeFoodPhoto!=='function') throw new Error('API'); const key=await TSBApiKeyVault.readKey(provider); const result=await client.analyzeFoodPhoto({file,apiKey:key,model:foodModel(provider, selectedModel),signal:ai.controller.signal}); if(state.foodAi!==ai||ai.requestId!==requestId||ai.date!==state.selectedDate)return; ai.result=result; ai.status='result'; renderFood(); }
+try { const provider=window.TSBApiKeyVault ? await TSBApiKeyVault.getPreference('selectedProvider') || 'gemini' : 'gemini'; const selectedModel=window.TSBApiKeyVault ? await TSBApiKeyVault.getPreference('selectedModel') || '' : ''; if(!['gemini','openai'].includes(provider)) throw new Error('UNSUPPORTED_PROVIDER'); if(!window.TSBApiKeyVault) throw new Error('NO_KEY'); if(!await TSBApiKeyVault.hasKey(provider)) throw new Error('NO_KEY'); const client=provider==='openai' ? window.TSBOpenAIFoodAIClient : window.TSBFoodAIClient; if(!client || typeof client.analyzeFoodPhoto!=='function') throw new Error('API'); const key=await TSBApiKeyVault.readKey(provider); const result=await client.analyzeFoodPhoto({file,apiKey:key,model:foodModel(provider, selectedModel),signal:ai.controller.signal}); if(state.foodAi!==ai||ai.requestId!==requestId||ai.date!==state.selectedDate)return; ai.result=result; ai.status='result'; renderFood(); }
     catch(error) { if(error?.name==='AbortError'||error?.message==='ABORTED'||state.foodAi!==ai||ai.requestId!==requestId)return; const safeCodes=['UNSUPPORTED_PROVIDER','NO_KEY','AUTH','QUOTA','NETWORK','TIMEOUT','INVALID_RESPONSE','INVALID_IMAGE','IMAGE_TOO_LARGE','API','ABORTED']; ai.errorCode=safeCodes.includes(error?.code)||safeCodes.includes(error?.message) ? (error.code||error.message) : 'API'; ai.error=({UNSUPPORTED_PROVIDER:'Выбранный провайдер пока не поддерживается.',NO_KEY:'Добавь ключ выбранного провайдера в настройках.',AUTH:'Проверь ключ в настройках.',QUOTA:'Лимит сервиса исчерпан.',NETWORK:'Нет связи с сервисом.',TIMEOUT:'Анализ занял слишком много времени.',INVALID_RESPONSE:'Сервис вернул непонятный результат.',INVALID_IMAGE:'Выбери JPEG, PNG или WebP.',IMAGE_TOO_LARGE:'Фото слишком большое.',API:'Сервис анализа сейчас недоступен.',ABORTED:'Анализ отменён.'}[ai.errorCode]||'Не удалось проанализировать фото.'); ai.status='error'; renderFood(); }
     finally { ai.controller=null; input.value=''; }
   }));
@@ -2674,17 +2673,26 @@ function renderApiKeyVaultHTML(metadata = [], provider = 'openai', model = '') {
   const saved = metadata.find(item => item.provider === provider);
   return `
     <section class="card settings-card api-key-vault-card" id="apiKeyVault" aria-labelledby="apiKeyVaultTitle">
-      <div class="card-title-row"><div><h2 id="apiKeyVaultTitle">Локальные API-ключи</h2><p class="muted">Ключи шифруются и хранятся только на этом устройстве. Food photo поддерживает Gemini и Qwen; OpenAI и Anthropic пока доступны только для хранения.</p></div></div>
+      <div class="card-title-row"><div><h2 id="apiKeyVaultTitle">Локальные API-ключи</h2><p class="muted">Ключи шифруются и хранятся только на этом устройстве. Food photo поддерживает Gemini и OpenAI с фиксированной моделью GPT-5.6 Luna.</p></div></div>
       <div class="settings-grid">
         <label class="setting-row"><span>API-провайдер<select id="apiKeyProvider" aria-label="API-провайдер">
-          ${[['openai','OpenAI'],['anthropic','Anthropic'],['gemini','Gemini'],['qwen','Qwen']].map(([value, label]) => `<option value="${value}" ${provider === value ? 'selected' : ''}>${label}</option>`).join('')}
+          ${[['openai','OpenAI'],['anthropic','Anthropic'],['gemini','Gemini']].map(([value, label]) => `<option value="${value}" ${provider === value ? 'selected' : ''}>${label}</option>`).join('')}
         </select></span></label>
-        <label class="setting-row"><span>Модель <span class="muted">(необязательно)</span><input id="apiKeyModel" type="text" maxlength="200" autocomplete="off" value="${escapeHTML(model)}" placeholder="Например, модель выбранного провайдера"></span></label>
+        <label class="setting-row"><span>Модель <span class="muted">(для OpenAI фиксирована)</span><input id="apiKeyModel" type="text" maxlength="200" autocomplete="off" value="${provider === 'openai' ? 'gpt-5.6-luna' : escapeHTML(model)}" placeholder="Модель выбранного провайдера" ${provider === 'openai' ? 'readonly' : ''}></span></label>
         <label class="setting-row"><span>API-ключ<input id="apiKeyInput" type="password" minlength="8" maxlength="4096" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Введите ключ"></span></label>
         <div class="api-key-vault-actions"><button class="primary-button" id="saveApiKeyBtn" type="button">Сохранить</button><button class="danger-button" id="deleteApiKeyBtn" type="button">Удалить</button></div>
         <p class="muted" id="apiKeyVaultStatus" role="status" aria-live="polite">Проверяем локальное хранилище…</p>
       </div>
     </section>`;
+}
+
+function normalizeApiKeyProvider(provider) { return ['openai', 'anthropic', 'gemini'].includes(provider) ? provider : 'openai'; }
+function syncApiKeyModelField(provider, modelInput, model = '') {
+  if (!modelInput) return;
+  const normalized = normalizeApiKeyProvider(provider);
+  const value = normalized === 'openai' ? 'gpt-5.6-luna' : (model === 'qwen3.8-flash' ? '' : model);
+  modelInput.value = value;
+  modelInput.readOnly = normalized === 'openai';
 }
 
 async function refreshApiKeyVault(root, provider) {
@@ -2702,10 +2710,14 @@ async function hydrateApiKeyVault(root) {
   const providerSelect = $('#apiKeyProvider', root);
   const modelInput = $('#apiKeyModel', root);
   try {
-    const provider = await TSBApiKeyVault.getPreference('selectedProvider') || 'openai';
+    const storedProvider = await TSBApiKeyVault.getPreference('selectedProvider') || 'openai';
+    const provider = normalizeApiKeyProvider(storedProvider);
     const model = await TSBApiKeyVault.getPreference('selectedModel') || '';
+    if (storedProvider !== provider) await TSBApiKeyVault.setPreference('selectedProvider', provider);
     if (providerSelect) providerSelect.value = provider;
-    if (modelInput) modelInput.value = model;
+    syncApiKeyModelField(provider, modelInput, model);
+    if (provider === 'openai' && model !== 'gpt-5.6-luna') await TSBApiKeyVault.setPreference('selectedModel', 'gpt-5.6-luna');
+    if (provider !== 'openai' && model === 'qwen3.8-flash') await TSBApiKeyVault.setPreference('selectedModel', '');
     await refreshApiKeyVault(root, provider);
   } catch (error) {
     const status = $('#apiKeyVaultStatus', root); if (status) status.textContent = 'Локальное хранилище недоступно';
@@ -2720,7 +2732,7 @@ function bindApiKeyVaultActions(root) {
   const remove = $('#deleteApiKeyBtn', root);
   if (!providerSelect || !input || !save || !remove || !window.TSBApiKeyVault) return;
   const setBusy = busy => { [providerSelect, modelInput, input, save, remove].forEach(element => { if (element) element.disabled = busy; }); };
-  providerSelect.onchange = async () => { try { await TSBApiKeyVault.setPreference('selectedProvider', providerSelect.value); await hydrateApiKeyVault(root); } catch (error) { showToast('Не удалось обновить настройки'); } };
+  providerSelect.onchange = async () => { try { const provider = normalizeApiKeyProvider(providerSelect.value); await TSBApiKeyVault.setPreference('selectedProvider', provider); syncApiKeyModelField(provider, modelInput, ''); await TSBApiKeyVault.setPreference('selectedModel', provider === 'openai' ? 'gpt-5.6-luna' : ''); await hydrateApiKeyVault(root); } catch (error) { showToast('Не удалось обновить настройки'); } };
   modelInput.onchange = async () => { try { await TSBApiKeyVault.setPreference('selectedModel', modelInput.value); } catch (error) { showToast('Не удалось обновить настройки'); } };
   save.onclick = async () => {
     const provider = providerSelect.value; const value = input.value;

@@ -6,7 +6,7 @@ The repository contains a locally implemented Cloudflare Pages Functions + D1 + 
 
 The provider API key is entered after installation and stays on the phone. The vault stores only encrypted data in IndexedDB and uses a non-extractable Web Crypto AES-GCM device key. Plaintext may exist transiently in memory during use, but is never persistent. No key is in repository/GitHub, build output/bundle, service-worker cache, app backup, state sync, D1, or server logs.
 
-Gemini and Qwen Food photo are implemented via direct browser requests. OpenAI and Anthropic are not implemented. Keys remain local, and the photo is sent to the selected provider only after explicit provider selection. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
+OpenAI and Gemini Food photo are implemented via direct browser requests. Anthropic is not implemented. Keys remain local, and the photo is sent to the selected provider only after explicit provider selection. Direct client API/CORS and billing risks apply; a backend provider proxy is not implemented.
 
 The legacy server encrypted credential vault was removed. `AI_CREDENTIAL_KEK` was removed too. The legacy label “encrypted per-user AI provider vault” is historical only. There is no server-side provider-key storage.
 
